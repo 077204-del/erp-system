@@ -67,7 +67,7 @@ app.use((req, res, next) => {
 // HEALTH CHECK
 // ======================
 app.get("/", (req, res) => {
-  res.json({
+  res.status(200).json({
     status: "OK",
     message: "ERP Backend Running",
   });
@@ -184,24 +184,24 @@ app.use((err, req, res, next) => {
 // ======================
 // DB + START
 // ======================
-const PORT = Number(process.env.PORT) || 5000;
-const HOST = process.env.HOST || "0.0.0.0";
+const PORT = process.env.PORT || 5000;
+const HOST = "0.0.0.0";
 
 (async () => {
   try {
     await connectDB();
     app.listen(PORT, HOST, () => {
       warnIfDeprecatedFinanceServiceLoaded();
+      console.log(`Server running on ${HOST}:${PORT}`);
       let publicHint =
         process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || "";
       if (!publicHint && process.env.RAILWAY_PUBLIC_DOMAIN) {
         const d = String(process.env.RAILWAY_PUBLIC_DOMAIN).trim();
         publicHint = d.startsWith("http") ? d : `https://${d}`;
       }
-      console.log(
-        `🚀 Server listening on http://${HOST}:${PORT}` +
-          (publicHint ? ` (public: ${publicHint})` : "")
-      );
+      if (publicHint) {
+        console.log(`Public URL: ${publicHint}`);
+      }
     });
   } catch (e) {
     console.error("Startup failed:", e && e.message ? e.message : e);
