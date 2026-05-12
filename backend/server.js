@@ -1,0 +1,210 @@
+require("dotenv").config();
+
+const {
+  warnErpEnvironment,
+  warnIfDeprecatedFinanceServiceLoaded,
+} = require("./config/erpStartupWarnings");
+warnErpEnvironment();
+
+const express = require("express");
+const cors = require("cors");
+
+const connectDB = require("./config/db");
+
+// ======================
+// ROUTES
+// ======================
+const productsRoutes = require("./routes/products.routes");
+const salesRoutes = require("./routes/sales.routes");
+const clientsRoutes = require("./routes/clients.routes");
+const paymentRoutes = require("./routes/payment.routes");
+const posRoutes = require("./routes/pos.routes");
+const clientStatementRoutes = require("./routes/client.statement.routes");
+const cashClosingRoutes = require("./routes/cash.closing.routes");
+const dashboardRoutes = require("./routes/dashboard.routes");
+const cashSessionRoutes = require("./routes/cash.session.routes");
+
+// 🔥 NEW: DAILY CLOSING ROUTE
+const dailyClosingRoutes = require("./routes/dailyClosing.routes");
+
+const usersRoutes = require("./routes/users.routes");
+const auditRoutes = require("./routes/audit.routes");
+const reportsRoutes = require("./routes/reports.routes");
+const settingsRoutes = require("./routes/settings.routes");
+const expenseRoutes = require("./routes/expense.routes");
+const dailyRegisterController = require("./controllers/dailyRegister.controller");
+
+// ======================
+// AUTH
+// ======================
+const auth = require("./controllers/auth.controller");
+const authMiddleware = require("./middleware/auth.middleware");
+const protectedAuthMiddleware = authMiddleware(["admin", "cashier"]);
+const adminOnly = authMiddleware.allowRoles("admin");
+const reportsGate = authMiddleware(["admin", "cashier", "canViewReports"]);
+
+const app = express();
+
+// ======================
+// MIDDLEWARE CORE
+// ======================
+// Reflect request Origin (Capacitor WebView, hosted SPA, LAN); optional FRONTEND_ORIGIN(s) documented in .env.example
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  })
+);
+app.use(express.json());
+
+// 🔥 STRONG LOGGER
+app.use((req, res, next) => {
+  console.log("➡️ ROUTE:", req.method, req.url);
+  next();
+});
+
+// ======================
+// HEALTH CHECK
+// ======================
+app.get("/", (req, res) => {
+  res.json({
+    status: "OK",
+    message: "ERP Backend Running",
+  });
+});
+
+// ======================
+// AUTH ROUTES
+// ======================
+app.post("/api/auth/login", auth.login);
+app.post("/api/auth/register", auth.register);
+
+// ======================
+// PROTECTED ROUTES
+// ======================
+app.use(
+  "/api/products",
+  protectedAuthMiddleware,
+  productsRoutes
+);
+
+app.use(
+  "/api/sales",
+  protectedAuthMiddleware,
+  salesRoutes
+);
+
+app.use(
+  "/api/clients",
+  protectedAuthMiddleware,
+  clientsRoutes
+);
+
+app.use(
+  "/api/payments",
+  protectedAuthMiddleware,
+  paymentRoutes
+);
+
+app.use(
+  "/api/pos",
+  protectedAuthMiddleware,
+  posRoutes
+);
+
+app.use(
+  "/api/client-statement",
+  protectedAuthMiddleware,
+  clientStatementRoutes
+);
+
+app.use(
+  "/api/cash-closing",
+  protectedAuthMiddleware,
+  cashClosingRoutes
+);
+
+app.use(
+  "/api/dashboard",
+  protectedAuthMiddleware,
+  dashboardRoutes
+);
+
+app.use(
+  "/api/cash-session",
+  protectedAuthMiddleware,
+  cashSessionRoutes
+);
+
+app.use(
+  "/api/daily-closing",
+  protectedAuthMiddleware,
+  dailyClosingRoutes
+);
+
+app.use("/api/users", adminOnly, usersRoutes);
+
+app.use("/api/audit-logs", adminOnly, auditRoutes);
+
+app.get(
+  "/api/reports/daily-register",
+  protectedAuthMiddleware,
+  reportsGate,
+  dailyRegisterController.getDailyRegister
+);
+
+app.use("/api/reports", protectedAuthMiddleware, reportsGate, reportsRoutes);
+
+app.use("/api/settings", adminOnly, settingsRoutes);
+
+app.use("/api/expenses", protectedAuthMiddleware, expenseRoutes);
+
+// ======================
+// 404 HANDLER
+// ======================
+app.use((req, res) => {
+  res.status(404).json({
+    error: "Route not found",
+    path: req.originalUrl,
+  });
+});
+
+// ======================
+// ERROR HANDLER
+// ======================
+app.use((err, req, res, next) => {
+  console.error("🔥 SERVER ERROR:", err);
+
+  res.status(500).json({
+    error: "Internal Server Error",
+    message: err.message,
+  });
+});
+
+// ======================
+// DB + START
+// ======================
+const PORT = Number(process.env.PORT) || 5000;
+const HOST = process.env.HOST || "0.0.0.0";
+
+(async () => {
+  try {
+    await connectDB();
+    app.listen(PORT, HOST, () => {
+      warnIfDeprecatedFinanceServiceLoaded();
+      let publicHint =
+        process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || "";
+      if (!publicHint && process.env.RAILWAY_PUBLIC_DOMAIN) {
+        const d = String(process.env.RAILWAY_PUBLIC_DOMAIN).trim();
+        publicHint = d.startsWith("http") ? d : `https://${d}`;
+      }
+      console.log(
+        `🚀 Server listening on http://${HOST}:${PORT}` +
+          (publicHint ? ` (public: ${publicHint})` : "")
+      );
+    });
+  } catch (e) {
+    console.error("Startup failed:", e && e.message ? e.message : e);
+    process.exit(1);
+  }
+})();

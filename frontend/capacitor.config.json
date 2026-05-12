@@ -1,0 +1,9 @@
+{
+  "appId": "com.erp.store",
+  "appName": "ERP System",
+  "webDir": "build",
+  "android": {
+    "backgroundColor": "#eef2f7",
+    "allowMixedContent": true
+  }
+}

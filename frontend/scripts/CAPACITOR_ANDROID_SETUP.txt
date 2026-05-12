@@ -1,0 +1,23 @@
+Capacitor Android — local build steps (React unchanged; backend unchanged)
+
+1) If npm install fails with EBUSY on electron\default_app.asar:
+   Close any Electron / IDE / antivirus using that file, then delete frontend\node_modules and run: npm install
+
+2) API URL for the device:
+   Production APK defaults to http://192.168.1.7:5000 when REACT_APP_API_URL is unset.
+   To override: copy .env.production.example to .env.production and set REACT_APP_API_URL.
+   Web dev (npm start) uses .env.development → same LAN URL as mobile
+
+3) Launcher icons (optional before release):
+   npm run icons:android
+
+4) Production web bundle + sync into Android:
+   npm run build
+   npx cap sync android
+
+5) Open in Android Studio and build APK:
+   npx cap open android
+   In Android Studio: Build → Build Bundle(s) / APK(s) → Build APK(s)
+
+Optional one-liner after a clean install:
+   npm run android:open
