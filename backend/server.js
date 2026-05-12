@@ -1,4 +1,9 @@
 require("dotenv").config();
+console.error(
+  `[ERP boot] ${new Date().toISOString()} cwd=${process.cwd()} NODE_ENV=${
+    process.env.NODE_ENV || "(unset)"
+  }`
+);
 
 const {
   warnErpEnvironment,
@@ -14,6 +19,7 @@ const connectDB = require("./config/db");
 // ======================
 // ROUTES
 // ======================
+console.error("[ERP boot] loading route modules…");
 const productsRoutes = require("./routes/products.routes");
 const salesRoutes = require("./routes/sales.routes");
 const clientsRoutes = require("./routes/clients.routes");
@@ -187,24 +193,43 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 const HOST = "0.0.0.0";
 
+process.on("unhandledRejection", (reason) => {
+  console.error("[ERP] unhandledRejection:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error(
+    "[ERP] uncaughtException (logged only; process not exited):",
+    err && err.stack ? err.stack : err
+  );
+});
+
+console.error("[ERP boot] Express app built; starting async startup (Mongo → listen)");
+
 (async () => {
   try {
+    console.error("[ERP startup] before Mongo connect");
     await connectDB();
-    app.listen(PORT, HOST, () => {
-      warnIfDeprecatedFinanceServiceLoaded();
-      console.log(`Server running on ${HOST}:${PORT}`);
-      let publicHint =
-        process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || "";
-      if (!publicHint && process.env.RAILWAY_PUBLIC_DOMAIN) {
-        const d = String(process.env.RAILWAY_PUBLIC_DOMAIN).trim();
-        publicHint = d.startsWith("http") ? d : `https://${d}`;
-      }
-      if (publicHint) {
-        console.log(`Public URL: ${publicHint}`);
-      }
-    });
+    console.error("[ERP startup] Mongo connect finished OK");
   } catch (e) {
-    console.error("Startup failed:", e && e.message ? e.message : e);
-    process.exit(1);
+    console.error(
+      "[ERP startup] Mongo unavailable; continuing to bind HTTP (degraded).",
+      e && e.message ? e.message : e
+    );
   }
+  console.error(
+    `[ERP startup] before app.listen host=${HOST} port=${PORT}`
+  );
+  app.listen(PORT, HOST, () => {
+    warnIfDeprecatedFinanceServiceLoaded();
+    console.log(`Server running on ${HOST}:${PORT}`);
+    let publicHint =
+      process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || "";
+    if (!publicHint && process.env.RAILWAY_PUBLIC_DOMAIN) {
+      const d = String(process.env.RAILWAY_PUBLIC_DOMAIN).trim();
+      publicHint = d.startsWith("http") ? d : `https://${d}`;
+    }
+    if (publicHint) {
+      console.log(`Public URL: ${publicHint}`);
+    }
+  });
 })();

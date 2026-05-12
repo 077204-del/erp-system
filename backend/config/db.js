@@ -34,24 +34,32 @@ function requireMongoUri() {
     console.error(
       "MongoDB Error ❌ MONGO_URI is missing or empty. Set it in the environment (e.g. .env)."
     );
-    process.exit(1);
+    console.error("[ERP startup] requireMongoUri: empty MONGO_URI (throwing)");
+    throw new Error("MONGO_URI is missing or empty");
   }
 }
 
 const connectDB = async () => {
+  console.error("[ERP startup] connectDB: validating MONGO_URI");
   requireMongoUri();
   try {
+    console.error("[ERP startup] connectDB: calling mongoose.connect…");
     console.log("Trying to connect to MongoDB...");
 
     await mongoose.connect(String(process.env.MONGO_URI).trim(), {
       serverSelectionTimeoutMS: 30_000,
     });
 
+    console.error("[ERP startup] connectDB: mongoose connected");
     console.log("MongoDB Connected ✅");
     await warnIfTransactionsUnsupported();
   } catch (error) {
-    console.error("MongoDB Error ❌", error.message);
-    process.exit(1);
+    console.error(
+      "[ERP startup] connectDB: mongoose.connect failed (throwing)",
+      error && error.message ? error.message : error
+    );
+    console.error("MongoDB Error ❌", error && error.message);
+    throw error;
   }
 };
 
