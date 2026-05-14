@@ -42,11 +42,11 @@ export function mapDashboardApiToState(data) {
     ? Number(stats.netProfit)
     : 0;
 
-  const invCap =
-    data?.access?.inventoryCapital === true &&
-    Number.isFinite(Number(stats.inventoryCapital))
-      ? Number(stats.inventoryCapital)
-      : null;
+  let invCap = null;
+  if (data?.access?.inventoryCapital === true) {
+    const n = Number(stats.inventoryCapital);
+    invCap = Number.isFinite(n) ? n : 0;
+  }
 
   return {
     dashboard: {

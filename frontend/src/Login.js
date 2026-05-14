@@ -11,6 +11,13 @@ function loginErrorMessage(err) {
   return d.message || d.error || err.message || "Login failed. Please try again.";
 }
 
+function normalizeStoredRole(role) {
+  let r = String(role || "").trim().toLowerCase();
+  if (r === "administrator" || r === "superadmin" || r === "owner") r = "admin";
+  if (r === "admin" || r === "manager" || r === "cashier") return r;
+  return r;
+}
+
 function Login({ onLogin, onLoadingChange }) {
   const { toast } = useErpUi();
   const { t } = useLocale();
@@ -36,11 +43,15 @@ function Login({ onLogin, onLoadingChange }) {
       });
 
       const token = res.data?.token;
-      const user = res.data?.user;
+      const user = res.data?.user ? { ...res.data.user } : null;
 
       if (!token) {
         setError(t("login.noToken"));
         return;
+      }
+
+      if (user && user.role != null) {
+        user.role = normalizeStoredRole(user.role);
       }
 
       localStorage.setItem("token", token);

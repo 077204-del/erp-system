@@ -43,9 +43,65 @@ function readStoredUser() {
   }
 }
 
+/** Decode JWT payload (no signature verify) — align UI with token when localStorage.user lags. */
+function decodeJwtPayloadUnsafe() {
+  try {
+    const t = localStorage.getItem("token");
+    if (!t) return null;
+    const parts = t.split(".");
+    if (parts.length < 2) return null;
+    let b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const pad = (4 - (b64.length % 4)) % 4;
+    if (pad) b64 += "=".repeat(pad);
+    const json = JSON.parse(atob(b64));
+    return json && typeof json === "object" ? json : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeRoleClient(role) {
+  let r = String(role || "").trim().toLowerCase();
+  if (r === "administrator" || r === "superadmin" || r === "owner") r = "admin";
+  if (r === "admin" || r === "manager" || r === "cashier") return r;
+  return r || "cashier";
+}
+
+/**
+ * Merge `localStorage.user` with JWT role/permissions when they differ (post-deploy / admin edits).
+ * Persists only when a patch is applied.
+ */
+function readStoredUserWithJwtSync() {
+  const u = readStoredUser();
+  const jwt = decodeJwtPayloadUnsafe();
+  if (!jwt) return u;
+
+  const jwtRole = jwt.role != null ? normalizeRoleClient(jwt.role) : "";
+  const storedRole = u != null ? normalizeRoleClient(u.role) : "";
+  const jwtPerms =
+    jwt.permissions != null && typeof jwt.permissions === "object"
+      ? jwt.permissions
+      : null;
+
+  if (!jwtRole || jwtRole === storedRole) return u;
+
+  const merged = {
+    ...(u && typeof u === "object" ? u : {}),
+    role: jwtRole,
+    ...(jwtPerms ? { permissions: jwtPerms } : {}),
+  };
+  if (merged.id == null && jwt.id != null) merged.id = String(jwt.id);
+  try {
+    localStorage.setItem("user", JSON.stringify(merged));
+  } catch {
+    /* ignore */
+  }
+  return merged;
+}
+
 function initialRangeForRole() {
   try {
-    const u = readStoredUser();
+    const u = readStoredUserWithJwtSync();
     if (String(u?.role || "").toLowerCase() === "cashier") {
       const t = new Date().toISOString().slice(0, 10);
       return { from: t, to: t };
@@ -92,7 +148,7 @@ function MainWorkspace({ setToken, reportLoading }) {
   const [to, setTo] = useState(rangeInit.to);
 
   const initialFetchRef = useRef(false);
-  const storedUser = readStoredUser();
+  const storedUser = readStoredUserWithJwtSync();
   const roleLower = String(storedUser?.role || "").toLowerCase();
   const isAdmin = roleLower === "admin";
   const isManager = roleLower === "manager";
