@@ -9,7 +9,7 @@ import {
   topClientsFromSales,
   topProductsFromSales,
 } from "../utils/erpAggregates";
-import { formatNumber, safeNum, safeText } from "../utils/erpFormat";
+import { formatMoneyDZD, formatNumber, safeNum, safeText } from "../utils/erpFormat";
 
 function parseRangeBounds(fromIso, toIso) {
   const a = new Date(`${fromIso}T00:00:00`);
@@ -149,7 +149,10 @@ export default function ReportsView({ sales, payments, from, to }) {
   );
   const payCount = payFiltered.length;
   const cashInFallback = safeNum(dashboardFallback?.stats?.cashIn, 0);
-  const netProfitFallback = safeNum(dashboardFallback?.stats?.netProfit, 0);
+  const netCashFlowFromDashFallback = safeNum(
+    dashboardFallback?.stats?.netProfit,
+    0
+  );
 
   const maxDayRev = useMemo(() => {
     if (!byDay.length) return 1;
@@ -158,7 +161,7 @@ export default function ReportsView({ sales, payments, from, to }) {
 
   const expDaily = Number(serverReport?.expensesBreakdown?.daily);
   const expMonthly = Number(serverReport?.expensesBreakdown?.monthly);
-  const repNetProfit = Number(serverReport?.netProfit);
+  const repNetCashFlow = Number(serverReport?.netProfit);
   const cvc = serverReport?.cashVsCredit;
   const cashPct =
     cvc && Number.isFinite(Number(cvc.ratioCash))
@@ -184,21 +187,23 @@ export default function ReportsView({ sales, payments, from, to }) {
           <div className="erp-card erp-card-kpi">
             <p className="erp-card-label">{t("reports.expDaily")}</p>
             <p className="erp-card-value erp-num">
-              {formatNumber(Number.isFinite(expDaily) ? expDaily : 0)}
+              {formatMoneyDZD(Number.isFinite(expDaily) ? expDaily : 0)}
             </p>
             <p className="erp-card-hint">{t("reports.kpiRangeHint")}</p>
           </div>
           <div className="erp-card erp-card-kpi">
             <p className="erp-card-label">{t("reports.expMonthly")}</p>
             <p className="erp-card-value erp-num">
-              {formatNumber(Number.isFinite(expMonthly) ? expMonthly : 0)}
+              {formatMoneyDZD(Number.isFinite(expMonthly) ? expMonthly : 0)}
             </p>
             <p className="erp-card-hint">{t("reports.kpiAllocHint")}</p>
           </div>
           <div className="erp-card erp-card-kpi">
-            <p className="erp-card-label">{t("reports.netProfit")}</p>
+            <p className="erp-card-label">{t("dashboard.netCashFlow")}</p>
             <p className="erp-card-value erp-num">
-              {formatNumber(Number.isFinite(repNetProfit) ? repNetProfit : 0)}
+              {formatMoneyDZD(
+                Number.isFinite(repNetCashFlow) ? repNetCashFlow : 0
+              )}
             </p>
             <p className="erp-card-hint">{t("reports.kpiNetHint")}</p>
           </div>
@@ -219,21 +224,21 @@ export default function ReportsView({ sales, payments, from, to }) {
               {t("reports.expDaily")} / {t("reports.expMonthly")}
             </p>
             <p className="erp-card-value erp-num">
-              {formatNumber(fbDaily)} · {formatNumber(fbMonthly)}
+              {formatMoneyDZD(fbDaily)} · {formatMoneyDZD(fbMonthly)}
             </p>
             <p className="erp-card-hint">{t("reports.fallbackBadge")}</p>
           </div>
           <div className="erp-card erp-card-kpi">
-            <p className="erp-card-label">{t("reports.netProfit")}</p>
+            <p className="erp-card-label">{t("dashboard.netCashFlow")}</p>
             <p className="erp-card-value erp-num">
-              {formatNumber(netProfitFallback)}
+              {formatMoneyDZD(netCashFlowFromDashFallback)}
             </p>
             <p className="erp-card-hint">{t("reports.fallbackNetHint")}</p>
           </div>
           <div className="erp-card erp-card-kpi">
             <p className="erp-card-label">{t("dashboard.totalCashIn")}</p>
             <p className="erp-card-value erp-num">
-              {formatNumber(cashInFallback)}
+              {formatMoneyDZD(cashInFallback)}
             </p>
             <p className="erp-card-hint">{t("reports.paymentsRegister")}</p>
           </div>
@@ -255,7 +260,7 @@ export default function ReportsView({ sales, payments, from, to }) {
                 />
               </div>
               <span className="erp-report-bar-val erp-num">
-                {formatNumber(cashCredit.cash)}
+                {formatMoneyDZD(cashCredit.cash)}
               </span>
             </div>
             <div className="erp-report-bar-row">
@@ -269,7 +274,7 @@ export default function ReportsView({ sales, payments, from, to }) {
                 />
               </div>
               <span className="erp-report-bar-val erp-num">
-                {formatNumber(cashCredit.credit)}
+                {formatMoneyDZD(cashCredit.credit)}
               </span>
             </div>
             <div className="erp-report-bar-row">
@@ -283,7 +288,7 @@ export default function ReportsView({ sales, payments, from, to }) {
                 />
               </div>
               <span className="erp-report-bar-val erp-num">
-                {formatNumber(cashCredit.mixed)}
+                {formatMoneyDZD(cashCredit.mixed)}
               </span>
             </div>
           </div>
@@ -295,11 +300,11 @@ export default function ReportsView({ sales, payments, from, to }) {
                 {" "}
                 · {t("reports.ledgerRev")}{" "}
                 <span className="erp-num">
-                  {formatNumber(serverReport.revenue)}
+                  {formatMoneyDZD(serverReport.revenue)}
                 </span>{" "}
                 · {t("reports.cashInSuffix")}{" "}
                 <span className="erp-num">
-                  {formatNumber(serverReport.cash?.totalCashIn)}
+                  {formatMoneyDZD(serverReport.cash?.totalCashIn)}
                 </span>
               </>
             ) : (
@@ -307,11 +312,11 @@ export default function ReportsView({ sales, payments, from, to }) {
                 {" "}
                 · {t("reports.ledgerRev")}{" "}
                 <span className="erp-num">
-                  {formatNumber(safeNum(dashboardFallback?.stats?.totalSales, 0))}
+                  {formatMoneyDZD(safeNum(dashboardFallback?.stats?.totalSales, 0))}
                 </span>{" "}
                 · {t("reports.cashInSuffix")}{" "}
                 <span className="erp-num">
-                  {formatNumber(cashInFallback)}
+                  {formatMoneyDZD(cashInFallback)}
                 </span>
               </>
             )}
@@ -336,7 +341,7 @@ export default function ReportsView({ sales, payments, from, to }) {
                     />
                   </div>
                   <span className="erp-report-bar-val erp-num">
-                    {formatNumber(d.revenue)}
+                    {formatMoneyDZD(d.revenue)}
                   </span>
                 </div>
               ))
@@ -369,7 +374,7 @@ export default function ReportsView({ sales, payments, from, to }) {
                     />
                   </div>
                   <span className="erp-report-bar-val erp-num">
-                    {formatNumber(m.revenue)}
+                    {formatMoneyDZD(m.revenue)}
                   </span>
                 </div>
               ))
@@ -390,7 +395,7 @@ export default function ReportsView({ sales, payments, from, to }) {
                     {safeText(p.name, "—")}
                   </span>
                   <span className="erp-report-rank-num erp-num">
-                    {formatNumber(p.revenue)}
+                    {formatMoneyDZD(p.revenue)}
                   </span>
                 </li>
               ))
@@ -411,7 +416,7 @@ export default function ReportsView({ sales, payments, from, to }) {
                     {safeText(c.name, "—")}
                   </span>
                   <span className="erp-report-rank-num erp-num">
-                    {formatNumber(c.revenue)}
+                    {formatMoneyDZD(c.revenue)}
                   </span>
                 </li>
               ))

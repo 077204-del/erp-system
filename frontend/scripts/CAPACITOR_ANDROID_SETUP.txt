@@ -1,23 +1,73 @@
-Capacitor Android — local build steps (React unchanged; backend unchanged)
+Capacitor Android — stable production (bundled UI + Render API)
 
-1) If npm install fails with EBUSY on electron\default_app.asar:
-   Close any Electron / IDE / antivirus using that file, then delete frontend\node_modules and run: npm install
 
-2) API URL for the device:
-   Production APK defaults to http://192.168.1.7:5000 when REACT_APP_API_URL is unset.
-   To override: copy .env.production.example to .env.production and set REACT_APP_API_URL.
-   Web dev (npm start) uses .env.development → same LAN URL as mobile
 
-3) Launcher icons (optional before release):
-   npm run icons:android
+ARCHITECTURE
 
-4) Production web bundle + sync into Android:
+------------
+
+- WebView loads the React app from **webDir** (`build/`) after `npm run build` + `cap sync`.
+
+- No `server.url` — no remote UI shell; one APK per UI release you ship.
+
+- API calls use **axios** + **src/config/apiBase.js** (`REACT_APP_API_URL` in `.env.production`, or `DEFAULT_API_ORIGIN`).
+
+
+
+RELEASE STEPS
+
+--------------
+
+1) Set API for production build (optional if default is correct):
+
+   Copy `.env.production.example` → `.env.production` and set `REACT_APP_API_URL=https://<your-render-api>`
+
+
+
+2) Build web bundle:
+
+   npm ci
+
    npm run build
+
+
+
+3) Copy into Android project:
+
    npx cap sync android
 
-5) Open in Android Studio and build APK:
-   npx cap open android
-   In Android Studio: Build → Build Bundle(s) / APK(s) → Build APK(s)
 
-Optional one-liner after a clean install:
-   npm run android:open
+
+4) Open Android Studio and build a signed release APK:
+
+   npx cap open android
+
+
+
+Convenience:
+
+   npm run android:sync   # build + sync
+
+   npm run android:open # build + sync + open Studio
+
+
+
+MOBILE STABILITY
+
+----------------
+
+- UI uses `ui.css` responsive rules (drawer under 900px width, KPI single column, safe areas).
+
+- `src/mobileBoot.js` scrolls focused fields; `--erp-vvh` tracks visual viewport when available.
+
+
+
+TROUBLESHOOTING
+
+---------------
+
+- Blank WebView: run `npm run build` then `cap sync` so `android/app/src/main/assets/public` is populated.
+
+- API errors: verify `REACT_APP_API_URL` was set **before** `npm run build` (CRA bakes env at build time).
+
+

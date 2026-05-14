@@ -6,6 +6,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import { useLocale } from "./LocaleContext";
 
 const ErpUiContext = createContext(null);
@@ -21,6 +23,7 @@ function ErpUiOverlays({
   handleConfirmOk,
 }) {
   const { t } = useLocale();
+  useBodyScrollLock(!!confirmState);
   return (
     <>
       <div
@@ -56,46 +59,49 @@ function ErpUiOverlays({
           </div>
         ))}
       </div>
-      {confirmState ? (
-        <div
-          className="erp-modal-backdrop"
-          role="presentation"
-          onClick={() => closeConfirm(false)}
-        >
-          <div
-            className="erp-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="erp-confirm-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="erp-confirm-title" className="erp-modal__title">
-              {confirmState.title}
-            </h2>
-            <p className="erp-modal__body">{confirmState.message}</p>
-            <div className="erp-modal__actions">
-              <button
-                type="button"
-                className="erp-btn erp-btn-ghost"
-                onClick={() => closeConfirm(false)}
+      {confirmState
+        ? createPortal(
+            <div
+              className="erp-modal-backdrop"
+              role="presentation"
+              onClick={() => closeConfirm(false)}
+            >
+              <div
+                className="erp-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="erp-confirm-title"
+                onClick={(e) => e.stopPropagation()}
               >
-                {t("ui.cancel")}
-              </button>
-              <button
-                type="button"
-                className={
-                  confirmState.danger
-                    ? "erp-btn erp-btn-danger"
-                    : "erp-btn erp-btn-primary"
-                }
-                onClick={handleConfirmOk}
-              >
-                {confirmState.confirmLabel}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+                <h2 id="erp-confirm-title" className="erp-modal__title">
+                  {confirmState.title}
+                </h2>
+                <p className="erp-modal__body">{confirmState.message}</p>
+                <div className="erp-modal__actions">
+                  <button
+                    type="button"
+                    className="erp-btn erp-btn-ghost"
+                    onClick={() => closeConfirm(false)}
+                  >
+                    {t("ui.cancel")}
+                  </button>
+                  <button
+                    type="button"
+                    className={
+                      confirmState.danger
+                        ? "erp-btn erp-btn-danger"
+                        : "erp-btn erp-btn-primary"
+                    }
+                    onClick={handleConfirmOk}
+                  >
+                    {confirmState.confirmLabel}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </>
   );
 }

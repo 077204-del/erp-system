@@ -17,6 +17,10 @@
 /android/.gradle
 /android/captures
 /android/local.properties
+/android/keystore.properties
+/android/release-upload.keystore
+/android/release-key.jks
+/android/*.jks
 *.keystore
 !debug.keystore
 

@@ -29,7 +29,12 @@
     "cap:open:android": "cap open android",
     "android:sync": "npm run build && cap sync",
     "android:open": "npm run build && cap sync && cap open android",
-    "icons:android": "node scripts/generate-android-icons.cjs"
+    "android:release": "npm run build && npx cap sync android && cd android && gradlew.bat assembleRelease",
+    "android:release:clean": "npm run build && npx cap sync android && cd android && gradlew.bat clean assembleRelease",
+    "android:release:unix": "npm run build && npx cap sync android && cd android && ./gradlew assembleRelease",
+    "android:release:clean:unix": "npm run build && npx cap sync android && cd android && ./gradlew clean assembleRelease",
+    "icons:android": "node scripts/generate-android-icons.cjs",
+    "android:icons": "node scripts/generate-android-icons.cjs"
   },
   "eslintConfig": {
     "extends": [

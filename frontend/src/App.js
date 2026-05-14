@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import api from "./api";
+import MobileLayoutPreview, {
+  isMobileLayoutPreviewHash,
+} from "./components/MobileLayoutPreview";
 import LayoutShell from "./components/LayoutShell";
 import { ErpUiProvider, useErpUi } from "./context/ErpUiContext";
 import { LocaleProvider, useLocale } from "./context/LocaleContext";
 import Login from "./Login";
 import { apiErrorMessage } from "./utils/erpFormat";
+import { mapDashboardApiToState } from "./utils/dashboardFinance";
 import CashClosingView from "./views/CashClosingView";
 import ClientDebtView from "./views/ClientDebtView";
 import DailyRegisterView from "./views/DailyRegisterView";
@@ -52,7 +56,7 @@ function MainWorkspace({ setToken, reportLoading }) {
     profit: 0,
     debt: 0,
     totalExpenses: 0,
-    netProfit: 0,
+    netCashFlow: 0,
   });
 
   const [cash, setCash] = useState({
@@ -72,6 +76,7 @@ function MainWorkspace({ setToken, reportLoading }) {
   const [from, setFrom] = useState("2020-01-01");
   const [to, setTo] = useState("2030-01-01");
 
+  const initialFetchRef = useRef(false);
   const storedUser = readStoredUser();
   const isAdmin =
     String(storedUser?.role || "").toLowerCase() === "admin";
@@ -89,6 +94,8 @@ function MainWorkspace({ setToken, reportLoading }) {
     isAdmin || String(storedUser?.role || "").toLowerCase() === "cashier" || perms.canCreateSales === true;
   const canCreatePayments =
     isAdmin || String(storedUser?.role || "").toLowerCase() === "cashier" || perms.canCreatePayments === true;
+  const canEditSales = isAdmin || perms.canEditSales === true;
+  const canDeleteSales = isAdmin || perms.canDeleteSales === true;
 
   useEffect(() => {
     reportLoading(loading);
@@ -112,49 +119,9 @@ function MainWorkspace({ setToken, reportLoading }) {
     ]);
 
     if (dashR.status === "fulfilled") {
-      const data = dashR.value.data;
-      const salesCount = Number.isFinite(Number(data?.stats?.sales))
-        ? Number(data.stats.sales)
-        : 0;
-      const totalSales = Number.isFinite(Number(data?.stats?.totalSales))
-        ? Number(data.stats.totalSales)
-        : 0;
-      const debtVal = Number.isFinite(Number(data?.stats?.totalDebt))
-        ? Number(data.stats.totalDebt)
-        : Number.isFinite(Number(data?.stats?.debt))
-          ? Number(data.stats.debt)
-          : Number.isFinite(Number(data?.debt))
-            ? Number(data.debt)
-            : 0;
-      setDashboard({
-        sales: salesCount,
-        salesCount,
-        totalSales,
-        profit: Number.isFinite(Number(data?.stats?.profit))
-          ? Number(data.stats.profit)
-          : 0,
-        debt: debtVal,
-        totalExpenses: Number.isFinite(Number(data?.stats?.totalExpenses))
-          ? Number(data.stats.totalExpenses)
-          : 0,
-        netProfit: Number.isFinite(Number(data?.stats?.netProfit))
-          ? Number(data.stats.netProfit)
-          : 0,
-      });
-      const cashInVal = Number.isFinite(Number(data?.stats?.cashIn))
-        ? Number(data.stats.cashIn)
-        : Number.isFinite(Number(data?.cash?.totalCashIn))
-          ? Number(data.cash.totalCashIn)
-          : 0;
-      setCash({
-        cashSales: Number.isFinite(Number(data?.cash?.cashSales))
-          ? Number(data.cash.cashSales)
-          : 0,
-        debtPayments: Number.isFinite(Number(data?.cash?.debtPayments))
-          ? Number(data.cash.debtPayments)
-          : 0,
-        totalCashIn: cashInVal,
-      });
+      const { dashboard: d, cash: c } = mapDashboardApiToState(dashR.value.data);
+      setDashboard(d);
+      setCash(c);
     } else {
       errs.push(apiErrorMessage(dashR.reason));
       setDashboard({
@@ -164,7 +131,7 @@ function MainWorkspace({ setToken, reportLoading }) {
         profit: 0,
         debt: 0,
         totalExpenses: 0,
-        netProfit: 0,
+        netCashFlow: 0,
       });
       setCash({
         cashSales: 0,
@@ -211,9 +178,26 @@ function MainWorkspace({ setToken, reportLoading }) {
   }, []);
 
   useEffect(() => {
+    if (initialFetchRef.current) return;
+    initialFetchRef.current = true;
     fetchAll(from, to);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchAll, from, to]);
+
+  useEffect(() => {
+    const onQueued = () => {
+      toast.info(t("app.offlineQueued"), t("app.offlineQueuedTitle"));
+    };
+    const onSynced = () => {
+      toast.success(t("app.offlineSynced"));
+      fetchAll(from, to);
+    };
+    window.addEventListener("erp:offline-queued", onQueued);
+    window.addEventListener("erp:offline-synced", onSynced);
+    return () => {
+      window.removeEventListener("erp:offline-queued", onQueued);
+      window.removeEventListener("erp:offline-synced", onSynced);
+    };
+  }, [fetchAll, from, to, toast, t]);
 
   useEffect(() => {
     const onAuthLost = () => {
@@ -351,6 +335,8 @@ function MainWorkspace({ setToken, reportLoading }) {
           clients={clients}
           onRefreshWorkspace={() => fetchAll(from, to)}
           canCreateSales={canCreateSales}
+          canEditSales={canEditSales}
+          canDeleteSales={canDeleteSales}
         />
       ) : null}
 
@@ -434,7 +420,9 @@ function MainWorkspace({ setToken, reportLoading }) {
         />
       ) : null}
 
-      {activeView === "expenses" ? <ExpensesView /> : null}
+      {activeView === "expenses" ? (
+        <ExpensesView onWorkspaceSync={() => fetchAll(from, to)} />
+      ) : null}
 
       {activeView === "users" ? <UsersModuleView /> : null}
 
@@ -448,6 +436,15 @@ function MainWorkspace({ setToken, reportLoading }) {
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token"));
   const [globalLoading, setGlobalLoading] = useState(false);
+  const [mobilePreview, setMobilePreview] = useState(() =>
+    isMobileLayoutPreviewHash()
+  );
+
+  useEffect(() => {
+    const onHash = () => setMobilePreview(isMobileLayoutPreviewHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   useEffect(() => {
     try {
@@ -462,6 +459,10 @@ export default function App() {
       /* ignore */
     }
   }, []);
+
+  if (mobilePreview) {
+    return <MobileLayoutPreview />;
+  }
 
   return (
     <LocaleProvider>

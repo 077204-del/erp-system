@@ -196,26 +196,28 @@ export default function LayoutShell({
   return (
     <div className={`erp-app ${layoutClass}`}>
       <aside className="erp-sidebar" aria-label="Main navigation">
-        <div className="erp-sidebar__brand">
-          {!collapsed ? (
-            <>
-              <span className="erp-sidebar__logo">ERP</span>
-              <span className="erp-sidebar__product">Workspace</span>
-            </>
-          ) : (
-            <span className="erp-sidebar__logo">E</span>
-          )}
+        <div className="erp-sidebar__header">
+          <div className="erp-sidebar__brand">
+            {!collapsed ? (
+              <>
+                <span className="erp-sidebar__logo">ERP</span>
+                <span className="erp-sidebar__product">ERP Store</span>
+              </>
+            ) : (
+              <span className="erp-sidebar__logo">E</span>
+            )}
+          </div>
+          <button
+            type="button"
+            className="erp-sidebar__collapse"
+            onClick={() => setCollapsed((c) => !c)}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <span className="erp-sidebar__collapse-icon" aria-hidden>
+              {collapsed ? "»" : "«"}
+            </span>
+          </button>
         </div>
-        <button
-          type="button"
-          className="erp-sidebar__collapse"
-          onClick={() => setCollapsed((c) => !c)}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          <span className="erp-sidebar__collapse-icon" aria-hidden>
-            {collapsed ? "»" : "«"}
-          </span>
-        </button>
         <nav className="erp-sidebar__nav">
           {navItems.map((item) => (
             <button

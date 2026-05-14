@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import api from "../api";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import { apiErrorMessage, safeNum, safeText } from "../utils/erpFormat";
 
 export default function ProductFormModal({
@@ -46,6 +48,8 @@ export default function ProductFormModal({
     }
   }, [open, mode, product]);
 
+  useBodyScrollLock(open);
+
   const submit = async () => {
     const n = name.trim();
     if (!n) {
@@ -86,11 +90,19 @@ export default function ProductFormModal({
     setSaving(true);
     try {
       if (mode === "edit" && product && product._id) {
-        await api.put(`/api/products/${product._id}`, body);
-        toast.success(t("productForm.updated"));
+        const res = await api.put(`/api/products/${product._id}`, body);
+        if (res.data && res.data.offlineQueued) {
+          toast.info(t("app.offlineQueued"), t("productForm.title"));
+        } else {
+          toast.success(t("productForm.updated"));
+        }
       } else {
-        await api.post("/api/products", body);
-        toast.success(t("productForm.created"));
+        const res = await api.post("/api/products", body);
+        if (res.data && res.data.offlineQueued) {
+          toast.info(t("app.offlineQueued"), t("productForm.title"));
+        } else {
+          toast.success(t("productForm.created"));
+        }
       }
       onClose();
       if (typeof onSaved === "function") onSaved();
@@ -110,7 +122,7 @@ export default function ProductFormModal({
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
       className="erp-modal-backdrop"
       role="presentation"
@@ -119,16 +131,17 @@ export default function ProductFormModal({
       }}
     >
       <div
-        className="erp-modal erp-modal--wide"
+        className="erp-modal erp-modal--wide erp-modal-form-shell"
         role="dialog"
         aria-modal="true"
         aria-labelledby="product-form-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="product-form-title" className="erp-modal__title">
-          {mode === "edit" ? t("productForm.editTitle") : t("productForm.addTitle")}
-        </h2>
-        <div className="erp-sale-flow-grid">
+        <div className="erp-modal-form-shell__scroll">
+          <h2 id="product-form-title" className="erp-modal__title">
+            {mode === "edit" ? t("productForm.editTitle") : t("productForm.addTitle")}
+          </h2>
+          <div className="erp-sale-flow-grid">
           <div className="erp-field">
             <label htmlFor="pf-name">{t("productForm.name")}</label>
             <input
@@ -208,7 +221,8 @@ export default function ProductFormModal({
             />
           </div>
         </div>
-        <div className="erp-modal__actions">
+        </div>
+        <div className="erp-modal__actions erp-modal-form-shell__actions">
           <button
             type="button"
             className="erp-btn erp-btn-ghost"
@@ -236,6 +250,7 @@ export default function ProductFormModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,10 +1,16 @@
 /**
- * API origin (web + Capacitor). No localhost — LAN default for mobile compatibility.
- * Optional runtime override (before React root mounts):
- *   window.__ERP_API_BASE__ = "https://api.example.com"
+ * Backend API origin only (Render Express). Used by axios (`src/api.js`) and offline replay.
+ * CRA bakes `REACT_APP_*` at **build** time — set `REACT_APP_API_URL` in `.env.production` before `npm run build`.
+ *
+ * Resolution order:
+ *   1) `window.__ERP_API_BASE__` (optional runtime override in WebView)
+ *   2) `process.env.REACT_APP_API_URL`
+ *   3) `DEFAULT_API_ORIGIN` (production Render default below)
+ *
+ * Remote UI (optional): `capacitor.config.json` → `server.url` before `npx cap sync` — keep API base separate.
  */
 
-const LAN_DEFAULT = "http://192.168.1.7:5000";
+const DEFAULT_API_ORIGIN = "https://erp-system-1-rgd2.onrender.com";
 
 function normalizeBase(url) {
   return String(url || "")
@@ -31,5 +37,5 @@ export function getApiBaseUrl() {
   const fromEnv = normalizeBase(process.env.REACT_APP_API_URL);
   if (fromEnv) return fromEnv;
 
-  return LAN_DEFAULT;
+  return DEFAULT_API_ORIGIN;
 }

@@ -1,8 +1,7 @@
 import { useMemo } from "react";
 import ErpModuleFooter from "../components/ErpModuleFooter";
 import { useLocale } from "../context/LocaleContext";
-import { formatNumber, safeNum } from "../utils/erpFormat";
-
+import { formatMoneyDZD, formatNumber, safeNum } from "../utils/erpFormat";
 export default function CashClosingView({ cash, dashboard, from, to }) {
   const { t } = useLocale();
   const recon = useMemo(() => {
@@ -20,15 +19,15 @@ export default function CashClosingView({ cash, dashboard, from, to }) {
       `${t("cashClosing.rangeHint")} ${from} → ${to}`,
       new Date().toISOString(),
       "",
-      `${t("cashClosing.cashSales")}: ${cash.cashSales}`,
-      `${t("cashClosing.debtPay")}: ${cash.debtPayments}`,
-      `${t("cashClosing.rowSum")}: ${recon.sum}`,
-      `${t("cashClosing.rowTotal")}: ${recon.total}`,
-      `${t("cashClosing.rowDiff")}: ${recon.diff}`,
+      `${t("cashClosing.cashSales")}: ${formatMoneyDZD(cash.cashSales)}`,
+      `${t("cashClosing.debtPay")}: ${formatMoneyDZD(cash.debtPayments)}`,
+      `${t("cashClosing.rowSum")}: ${formatMoneyDZD(recon.sum)}`,
+      `${t("cashClosing.rowTotal")}: ${formatMoneyDZD(recon.total)}`,
+      `${t("cashClosing.rowDiff")}: ${formatMoneyDZD(recon.diff)}`,
       "",
-      `${t("cashClosing.saleCount")}: ${dashboard.sales}`,
-      `${t("cashClosing.profit")}: ${dashboard.profit}`,
-      `${t("cashClosing.debt")}: ${dashboard.debt}`,
+      `${t("cashClosing.saleCount")}: ${formatNumber(dashboard.sales)}`,
+      `${t("cashClosing.profit")}: ${formatMoneyDZD(dashboard.profit)}`,
+      `${t("cashClosing.debt")}: ${formatMoneyDZD(dashboard.debt)}`,
       "",
       "Created by Habbal Hakim",
     ];
@@ -52,19 +51,19 @@ export default function CashClosingView({ cash, dashboard, from, to }) {
         <div className="erp-card erp-card-elevated">
           <p className="erp-card-label">{t("cashClosing.cashSales")}</p>
           <p className="erp-card-value erp-num">
-            {formatNumber(cash.cashSales)}
+            {formatMoneyDZD(cash.cashSales)}
           </p>
         </div>
         <div className="erp-card erp-card-elevated">
           <p className="erp-card-label">{t("cashClosing.debtPay")}</p>
           <p className="erp-card-value erp-num">
-            {formatNumber(cash.debtPayments)}
+            {formatMoneyDZD(cash.debtPayments)}
           </p>
         </div>
         <div className="erp-card erp-card-elevated">
           <p className="erp-card-label">{t("cashClosing.totalCashIn")}</p>
           <p className="erp-card-value erp-num">
-            {formatNumber(cash.totalCashIn)}
+            {formatMoneyDZD(cash.totalCashIn)}
           </p>
         </div>
       </div>
@@ -77,13 +76,13 @@ export default function CashClosingView({ cash, dashboard, from, to }) {
               <tr>
                 <td>{t("cashClosing.rowSum")}</td>
                 <td className="erp-table-num erp-num">
-                  {formatNumber(recon.sum)}
+                  {formatMoneyDZD(recon.sum)}
                 </td>
               </tr>
               <tr>
                 <td>{t("cashClosing.rowTotal")}</td>
                 <td className="erp-table-num erp-num">
-                  {formatNumber(recon.total)}
+                  {formatMoneyDZD(recon.total)}
                 </td>
               </tr>
               <tr className="erp-closing-diff-row">
@@ -96,7 +95,7 @@ export default function CashClosingView({ cash, dashboard, from, to }) {
                         : "erp-badge erp-badge--warning"
                     }
                   >
-                    {formatNumber(recon.diff)}
+                    {formatMoneyDZD(recon.diff)}
                   </span>
                 </td>
               </tr>
@@ -108,9 +107,9 @@ export default function CashClosingView({ cash, dashboard, from, to }) {
           {t("cashClosing.saleCount")}{" "}
           <span className="erp-num">{formatNumber(dashboard.sales)}</span> ·{" "}
           {t("cashClosing.profit")}{" "}
-          <span className="erp-num">{formatNumber(dashboard.profit)}</span> ·{" "}
+          <span className="erp-num">{formatMoneyDZD(dashboard.profit)}</span> ·{" "}
           {t("cashClosing.debt")}{" "}
-          <span className="erp-num">{formatNumber(dashboard.debt)}</span>
+          <span className="erp-num">{formatMoneyDZD(dashboard.debt)}</span>
         </p>
         <button
           type="button"

@@ -1,0 +1,245 @@
+/**
+ * In-app mobile frame on a wide browser viewport: `min-width: 901px` rules would
+ * otherwise turn on desktop grid while the frame is only ~390px. These overrides
+ * force the default mobile shell inside `.erp-mobile-preview-viewport`. `transform`
+ * creates a fixed-position containing block so the drawer anchors to the frame.
+ */
+
+html.erp-mobile-preview-active,
+html.erp-mobile-preview-active body,
+html.erp-mobile-preview-active #root {
+  height: auto;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  overscroll-behavior-y: auto;
+}
+
+html.erp-mobile-preview-active #root {
+  display: block;
+}
+
+.erp-mobile-preview-page {
+  min-height: 100%;
+  padding: 1.25rem 1rem 2rem;
+  box-sizing: border-box;
+  background: linear-gradient(165deg, #0f172a 0%, #1e293b 55%, #334155 100%);
+  color: #e2e8f0;
+  font-family: var(--erp-font, Cairo, Tajawal, system-ui, sans-serif);
+}
+
+.erp-mobile-preview-page__hint {
+  max-width: 52rem;
+  margin: 0 auto 1rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+
+.erp-mobile-preview-page__hint code {
+  font-size: 0.82em;
+  padding: 0.12em 0.35em;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.65);
+  color: #f1f5f9;
+}
+
+.erp-mobile-preview-toolbar {
+  max-width: 52rem;
+  margin: 0 auto 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.erp-mobile-preview-toolbar__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  width: 100%;
+}
+
+.erp-mobile-preview-toolbar button {
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.5);
+  color: #f8fafc;
+  cursor: pointer;
+}
+
+.erp-mobile-preview-toolbar button:hover {
+  background: rgba(30, 41, 59, 0.85);
+}
+
+.erp-mobile-preview-toolbar button.erp-mobile-preview-toolbar__btn--active {
+  border-color: #38bdf8;
+  background: rgba(14, 116, 144, 0.35);
+  color: #e0f2fe;
+}
+
+.erp-mobile-preview-chrome {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0.6rem 0.85rem 0.85rem;
+  border-radius: 28px;
+  background: linear-gradient(180deg, #475569 0%, #1e293b 100%);
+  box-shadow:
+    0 24px 48px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  width: fit-content;
+}
+
+.erp-mobile-preview-chrome__speaker {
+  height: 22px;
+  margin: 0 auto 0.5rem;
+  width: 88px;
+  border-radius: 999px;
+  background: #0f172a;
+  opacity: 0.9;
+}
+
+.erp-mobile-preview-viewport {
+  position: relative;
+  width: 390px;
+  max-width: 100%;
+  height: min(780px, calc(100dvh - 11rem));
+  min-height: 520px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--erp-bg);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.25);
+  /* Fixed sidebar / scrim anchor to this frame, not the browser window */
+  transform: translateZ(0);
+  isolation: isolate;
+}
+
+/* ---------- Mirror @media (max-width: 900px) layout (higher specificity than RTL grid) ---------- */
+
+.erp-mobile-preview-viewport .erp-app.erp-layout,
+html[dir="rtl"] .erp-mobile-preview-viewport .erp-app.erp-layout,
+html[dir="rtl"] .erp-mobile-preview-viewport .erp-app.erp-layout--sidebar-collapsed {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  grid-template-columns: unset;
+  grid-template-rows: unset;
+  height: 100%;
+  width: 100%;
+  max-width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.erp-mobile-preview-viewport .erp-main,
+html[dir="rtl"] .erp-mobile-preview-viewport .erp-main {
+  grid-column: auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.erp-mobile-preview-viewport .erp-sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: min(280px, 88%);
+  height: 100%;
+  max-height: 100%;
+  transform: translateX(-100%);
+  z-index: 101;
+  box-shadow: var(--erp-shadow-md);
+  grid-column: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+html[dir="rtl"] .erp-mobile-preview-viewport .erp-sidebar {
+  grid-column: auto;
+  left: auto;
+  right: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  border-right: none;
+  transform: translateX(100%);
+}
+
+html[dir="rtl"] .erp-mobile-preview-viewport .erp-layout--drawer-open .erp-sidebar {
+  transform: translateX(0);
+}
+
+.erp-mobile-preview-viewport .erp-layout--drawer-open .erp-sidebar {
+  transform: translateX(0);
+}
+
+.erp-mobile-preview-viewport .erp-drawer-scrim {
+  display: block;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 90;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--erp-transition);
+}
+
+.erp-mobile-preview-viewport .erp-layout--drawer-open .erp-drawer-scrim {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.erp-mobile-preview-viewport .erp-topbar__menu {
+  display: inline-flex;
+}
+
+.erp-mobile-preview-viewport .erp-sidebar__collapse {
+  display: none;
+}
+
+.erp-mobile-preview-viewport .erp-layout--sidebar-collapsed {
+  grid-template-columns: unset;
+}
+
+.erp-mobile-preview-viewport .erp-main__body {
+  padding: var(--erp-space-5) var(--erp-space-4) var(--erp-space-8);
+  max-width: 100%;
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.erp-mobile-preview-viewport .erp-topbar {
+  padding: 0 var(--erp-space-4);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Viewport-wide breakpoints still fire on desktop — keep grids single-column inside the frame */
+.erp-mobile-preview-viewport .erp-kpi-grid {
+  grid-template-columns: 1fr;
+}
+
+.erp-mobile-preview-viewport .erp-workspace-toolbar {
+  justify-content: stretch;
+}
+
+.erp-mobile-preview-viewport .erp-workspace-toolbar .erp-btn {
+  width: 100%;
+}
+
+.erp-mobile-preview-viewport .erp-toast-stack {
+  right: 0.75rem;
+  left: 0.75rem;
+  bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  max-width: none;
+}

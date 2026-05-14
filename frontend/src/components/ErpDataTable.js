@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useLocale } from "../context/LocaleContext";
-import { formatNumber, safeText } from "../utils/erpFormat";
+import { formatMoneyDZD, formatNumber, safeText } from "../utils/erpFormat";
 
 function TableRowSkeleton({ colCount }) {
   return (
@@ -28,10 +28,10 @@ function TableRowSkeleton({ colCount }) {
  * @param {string} props.emptyTitle
  * @param {string} [props.emptyHint]
  */
-export default function ErpDataTable({
+function ErpDataTable({
   columns,
   rows,
-  getRowId,
+  getRowId = (row) => String(row?.id ?? row?._id ?? ""),
   pageSize = 10,
   loading = false,
   showSkeleton = false,
@@ -126,8 +126,10 @@ export default function ErpDataTable({
                 </td>
               </tr>
             ) : (
-              pageRows.map((row) => (
-                <tr key={getRowId(row)}>
+              pageRows.map((row, idx) => {
+                const rowKey = String(getRowId(row) ?? "").trim();
+                return (
+                <tr key={rowKey || `erp-row-${safePage}-${idx}`}>
                   {columns.map((c) => (
                     <td
                       key={c.key}
@@ -146,11 +148,12 @@ export default function ErpDataTable({
                     >
                       {c.render
                         ? c.render(row)
-                        : formatCell(row[c.key], c.numeric)}
+                        : formatCell(row[c.key], c)}
                     </td>
                   ))}
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>
@@ -182,7 +185,11 @@ export default function ErpDataTable({
   );
 }
 
-function formatCell(value, numeric) {
-  if (numeric) return formatNumber(value);
+function formatCell(value, col) {
+  if (col && col.numeric) {
+    return col.currency ? formatMoneyDZD(value) : formatNumber(value);
+  }
   return safeText(value, "—");
 }
+
+export default memo(ErpDataTable);

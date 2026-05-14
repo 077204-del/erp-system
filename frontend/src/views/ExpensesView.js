@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../api";
 import ErpDataTable from "../components/ErpDataTable";
 import ErpModuleFooter from "../components/ErpModuleFooter";
 import { useErpUi } from "../context/ErpUiContext";
 import { useLocale } from "../context/LocaleContext";
-import { apiErrorMessage, formatNumber, safeText } from "../utils/erpFormat";
+import { apiErrorMessage, formatMoneyDZD, safeText } from "../utils/erpFormat";
 
 function readExpenseWriteAccess() {
   try {
@@ -29,9 +29,39 @@ function monthBoundsISO(d) {
   return { from, to, monthKey: `${y}-${String(m + 1).padStart(2, "0")}` };
 }
 
-export default function ExpensesView() {
+function isoDateInFilterRange(isoDate, fromStr, toStr) {
+  const d = String(isoDate || "").slice(0, 10);
+  if (!d || !fromStr || !toStr) return false;
+  return d >= fromStr && d <= toStr;
+}
+
+/** Normalize API row so id + date are stable (Mongo often uses _id). */
+function normalizeExpenseRow(raw) {
+  if (!raw || typeof raw !== "object") return raw;
+  const id = raw.id ?? raw._id;
+  const dateRaw = raw.date ?? raw.createdAt ?? raw.recordedAt;
+  const date =
+    dateRaw != null
+      ? String(dateRaw).slice(0, 10)
+      : raw.date != null
+        ? String(raw.date).slice(0, 10)
+        : undefined;
+  return {
+    ...raw,
+    id: id != null ? String(id) : undefined,
+    date,
+  };
+}
+
+export default function ExpensesView({ onWorkspaceSync }) {
   const { toast, confirm } = useErpUi();
   const { t } = useLocale();
+  const toastRef = useRef(toast);
+  const tRef = useRef(t);
+  useEffect(() => {
+    toastRef.current = toast;
+    tRef.current = t;
+  }, [toast, t]);
   const [canWriteExpenses] = useState(() => readExpenseWriteAccess());
 
   const [tab, setTab] = useState("monthly");
@@ -69,7 +99,11 @@ export default function ExpensesView() {
         }),
         api.get("/api/expenses/summary", { params: { month: monthKey } }),
       ]);
-      setRows(Array.isArray(listRes.data) ? listRes.data : []);
+      setRows(
+        Array.isArray(listRes.data)
+          ? listRes.data.map((r) => normalizeExpenseRow(r))
+          : []
+      );
       const s = sumRes.data || {};
       setSummary({
         totalDaily: Number.isFinite(Number(s.totalDaily))
@@ -90,12 +124,15 @@ export default function ExpensesView() {
         setUnavailable(true);
       } else {
         setUnavailable(false);
-        toast.error(apiErrorMessage(e), t("expenses.toastTitle"));
+        toastRef.current.error(
+          apiErrorMessage(e),
+          tRef.current("expenses.toastTitle")
+        );
       }
     } finally {
       setLoading(false);
     }
-  }, [tab, from, to, monthKey, toast, t]);
+  }, [tab, from, to, monthKey]);
 
   useEffect(() => {
     load();
@@ -122,12 +159,28 @@ export default function ExpensesView() {
 
     try {
       setSaving(true);
-      await api.post("/api/expenses", body);
-      toast.success(t("expenses.recorded"));
+      const res = await api.post("/api/expenses", body);
+      if (res.data && res.data.offlineQueued) {
+        toast.info(t("app.offlineQueued"), t("expenses.toastTitle"));
+      } else {
+        toast.success(t("expenses.recorded"));
+      }
       setFormDescription("");
       setFormAmount("");
       setFormCategory("");
+      if (!isoDateInFilterRange(formDate, from, to)) {
+        const d = new Date(`${formDate}T12:00:00`);
+        if (!Number.isNaN(d.getTime())) {
+          const b = monthBoundsISO(d);
+          setMonthKey(b.monthKey);
+          setFrom(b.from);
+          setTo(b.to);
+        }
+      }
       await load();
+      if (typeof onWorkspaceSync === "function") {
+        await Promise.resolve(onWorkspaceSync());
+      }
     } catch (e) {
       toast.error(apiErrorMessage(e), t("expenses.toastTitle"));
     } finally {
@@ -136,7 +189,8 @@ export default function ExpensesView() {
   };
 
   const onDelete = (row) => {
-    if (!row || !row.id) return;
+    const id = row && (row.id ?? row._id);
+    if (!id) return;
     confirm({
       title: t("expenses.deleteTitle"),
       message: safeText(row.description, "—"),
@@ -144,9 +198,16 @@ export default function ExpensesView() {
       danger: true,
       onConfirm: async () => {
         try {
-          await api.delete(`/api/expenses/${row.id}`);
-          toast.success(t("expenses.deleted"));
+          const res = await api.delete(`/api/expenses/${id}`);
+          if (res.data && res.data.offlineQueued) {
+            toast.info(t("app.offlineQueued"), t("expenses.toastTitle"));
+          } else {
+            toast.success(t("expenses.deleted"));
+          }
           await load();
+          if (typeof onWorkspaceSync === "function") {
+            await Promise.resolve(onWorkspaceSync());
+          }
         } catch (e) {
           toast.error(apiErrorMessage(e), t("expenses.toastTitle"));
         }
@@ -181,7 +242,7 @@ export default function ExpensesView() {
       header: t("expenses.colAmount"),
       numeric: true,
       render: (r) => (
-        <span className="erp-num">{formatNumber(r.amount)}</span>
+        <span className="erp-num">{formatMoneyDZD(r.amount)}</span>
       ),
     },
     {
@@ -306,19 +367,19 @@ export default function ExpensesView() {
         <div className="erp-card erp-card-kpi">
           <p className="erp-card-label">{t("expenses.dailyMonthKpi")}</p>
           <p className="erp-card-value erp-num">
-            {formatNumber(summary.totalDaily)}
+            {formatMoneyDZD(summary.totalDaily)}
           </p>
         </div>
         <div className="erp-card erp-card-kpi">
           <p className="erp-card-label">{t("expenses.monthlyMonthKpi")}</p>
           <p className="erp-card-value erp-num">
-            {formatNumber(summary.totalMonthly)}
+            {formatMoneyDZD(summary.totalMonthly)}
           </p>
         </div>
         <div className="erp-card erp-card-kpi">
           <p className="erp-card-label">{t("expenses.totalMonthKpi")}</p>
           <p className="erp-card-value erp-num">
-            {formatNumber(summary.totalExpenses)}
+            {formatMoneyDZD(summary.totalExpenses)}
           </p>
         </div>
       </div>
@@ -394,6 +455,7 @@ export default function ExpensesView() {
         title={t("expenses.records")}
         columns={columns}
         rows={rows}
+        getRowId={(r) => String(r.id ?? r._id ?? "")}
         loading={loading}
         showSkeleton={loading}
         emptyHint={t("expenses.noExpenses")}

@@ -1,10 +1,34 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import api from "../api";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import { useLocale } from "../context/LocaleContext";
-import { apiErrorMessage, formatNumber, safeNum, safeText } from "../utils/erpFormat";
+import {
+  apiErrorMessage,
+  formatMoneyDZD,
+  formatNumber,
+  safeNum,
+  safeText,
+} from "../utils/erpFormat";
+
+function saleProductId(s) {
+  if (!s) return "";
+  const p = s.productId;
+  if (p && typeof p === "object" && p._id != null) return String(p._id);
+  if (p != null) return String(p);
+  return "";
+}
+
+function saleClientId(s) {
+  if (!s) return "";
+  const c = s.clientId;
+  if (c && typeof c === "object" && c._id != null) return String(c._id);
+  if (c != null) return String(c);
+  return "";
+}
 
 /**
- * POST /api/sales with optional negotiatedUnitPrice (agreed unit price after negotiation).
+ * POST /api/sales (create) or PATCH /api/sales/:id (edit) with negotiatedUnitPrice.
  */
 export default function NewSaleModal({
   open,
@@ -13,8 +37,11 @@ export default function NewSaleModal({
   clients,
   onSuccess,
   toast,
+  mode = "create",
+  editSale = null,
 }) {
   const { t } = useLocale();
+  useBodyScrollLock(open);
   const [productId, setProductId] = useState("");
   const [clientId, setClientId] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -23,8 +50,30 @@ export default function NewSaleModal({
   const [partialPay, setPartialPay] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const isEdit = mode === "edit" && editSale != null;
+
   useEffect(() => {
     if (!open) return;
+    if (isEdit && editSale) {
+      setProductId(saleProductId(editSale));
+      setClientId(saleClientId(editSale));
+      setQuantity(String(editSale.quantity ?? 1));
+      setAgreedPrice(String(safeNum(editSale.unitPrice, 0)));
+      const total = safeNum(editSale.total, 0);
+      const paid = safeNum(editSale.paidAmount, 0);
+      if (paid <= 0) {
+        setPayMode("credit");
+        setPartialPay("");
+      } else if (total > 0 && paid >= total) {
+        setPayMode("full_cash");
+        setPartialPay("");
+      } else {
+        setPayMode("partial");
+        setPartialPay(String(paid));
+      }
+      setSaving(false);
+      return;
+    }
     setProductId("");
     setClientId("");
     setQuantity("1");
@@ -32,7 +81,7 @@ export default function NewSaleModal({
     setPayMode("full_cash");
     setPartialPay("");
     setSaving(false);
-  }, [open]);
+  }, [open, isEdit, editSale]);
 
   const product = useMemo(() => {
     if (!productId || !Array.isArray(products)) return null;
@@ -40,16 +89,34 @@ export default function NewSaleModal({
   }, [productId, products]);
 
   const listPrice = product ? safeNum(product.salePrice, 0) : 0;
-  const stock = product ? safeNum(product.qty, 0) : 0;
+  const stockBase = product ? safeNum(product.qty, 0) : 0;
   const qtyNum = Math.floor(safeNum(quantity, 0));
 
+  const stockAvailable = useMemo(() => {
+    if (!product || !isEdit || !editSale) return stockBase;
+    const origPid = saleProductId(editSale);
+    if (String(product._id) === origPid) {
+      return stockBase + Math.floor(safeNum(editSale.quantity, 0));
+    }
+    return stockBase;
+  }, [product, isEdit, editSale, stockBase]);
+
   useEffect(() => {
+    if (!open || isEdit) return;
     if (!product) {
       setAgreedPrice("");
       return;
     }
     setAgreedPrice(String(safeNum(product.salePrice, 0)));
-  }, [productId, product]);
+  }, [open, isEdit, productId, product]);
+
+  useEffect(() => {
+    if (!open || !isEdit || !editSale || !product) return;
+    const origPid = saleProductId(editSale);
+    if (String(productId) !== origPid) {
+      setAgreedPrice(String(safeNum(product.salePrice, 0)));
+    }
+  }, [open, isEdit, editSale, productId, product]);
 
   const agreedNum = safeNum(agreedPrice, 0);
   const lineTotal =
@@ -66,8 +133,8 @@ export default function NewSaleModal({
     Boolean(productId) &&
     Boolean(clientId) &&
     qtyNum > 0 &&
-    qtyNum <= stock &&
-    stock > 0 &&
+    qtyNum <= stockAvailable &&
+    stockAvailable > 0 &&
     agreedNum > 0 &&
     Number.isFinite(lineTotal) &&
     lineTotal > 0 &&
@@ -79,7 +146,7 @@ export default function NewSaleModal({
       toast.warning(t("saleFlow.needProduct"));
       return;
     }
-    if (!(qtyNum > 0) || qtyNum > stock) {
+    if (!(qtyNum > 0) || qtyNum > stockAvailable) {
       toast.warning(t("saleFlow.needQty"));
       return;
     }
@@ -119,15 +186,38 @@ export default function NewSaleModal({
 
     setSaving(true);
     try {
-      await api.post("/api/sales", body);
-      toast.success(t("saleFlow.success"), t("saleFlow.title"));
+      let res;
+      if (isEdit && editSale && editSale._id != null) {
+        res = await api.patch(
+          `/api/sales/${encodeURIComponent(String(editSale._id))}`,
+          body
+        );
+      } else {
+        res = await api.post("/api/sales", body);
+      }
+      if (res.data && res.data.offlineQueued) {
+        toast.info(t("app.offlineQueued"), t("saleFlow.title"));
+      } else {
+        toast.success(
+          isEdit ? t("saleFlow.updateSuccess") : t("saleFlow.success"),
+          isEdit ? t("saleFlow.editTitle") : t("saleFlow.title")
+        );
+      }
       onClose();
       if (typeof onSuccess === "function") onSuccess();
     } catch (err) {
       const st = err.response && err.response.status;
-      const msg =
-        st === 403 ? t("saleFlow.forbidden") : apiErrorMessage(err);
-      toast.error(msg, t("saleFlow.title"));
+      const data = err.response && err.response.data;
+      let msg = st === 403 ? t("saleFlow.forbidden") : apiErrorMessage(err);
+      if (
+        st === 400 &&
+        data &&
+        data.code === "SALE_EDIT_PAYMENT_CONFLICT" &&
+        data.message
+      ) {
+        msg = String(data.message);
+      }
+      toast.error(msg, isEdit ? t("saleFlow.editTitle") : t("saleFlow.title"));
     } finally {
       setSaving(false);
     }
@@ -135,7 +225,9 @@ export default function NewSaleModal({
 
   if (!open) return null;
 
-  return (
+  const modalTitle = isEdit ? t("saleFlow.editTitle") : t("saleFlow.title");
+
+  const modal = (
     <div
       className="erp-modal-backdrop"
       role="presentation"
@@ -150,15 +242,16 @@ export default function NewSaleModal({
         aria-labelledby="new-sale-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="new-sale-title" className="erp-modal__title">
-          {t("saleFlow.title")}
-        </h2>
-        <p className="erp-modal__body erp-sale-flow-lead">{t("saleFlow.lead")}</p>
-        <p className="erp-card-hint" style={{ marginTop: "-0.5rem" }}>
-          {t("saleFlow.agreedHint")}
-        </p>
+        <div className="erp-sale-modal__scroll erp-modal-dialog-scroll">
+          <h2 id="new-sale-title" className="erp-modal__title">
+            {modalTitle}
+          </h2>
+          <p className="erp-modal__body erp-sale-flow-lead">{t("saleFlow.lead")}</p>
+          <p className="erp-card-hint" style={{ marginTop: "-0.5rem" }}>
+            {t("saleFlow.agreedHint")}
+          </p>
 
-        <div className="erp-sale-flow-grid">
+          <div className="erp-sale-flow-grid">
           <div className="erp-field">
             <label htmlFor="sale-product">{t("saleFlow.product")}</label>
             <select
@@ -169,8 +262,8 @@ export default function NewSaleModal({
             >
               <option value="">{t("saleFlow.pickProduct")}</option>
               {(Array.isArray(products) ? products : []).map((p) => (
-                <option key={p._id} value={p._id}>
-                  {safeText(p.name, "—")} · {formatNumber(p.salePrice)} ·{" "}
+                <option key={String(p._id)} value={p._id}>
+                  {safeText(p.name, "—")} · {formatMoneyDZD(p.salePrice)} ·{" "}
                   {t("saleFlow.stock")}: {formatNumber(p.qty)}
                 </option>
               ))}
@@ -187,7 +280,7 @@ export default function NewSaleModal({
             >
               <option value="">{t("saleFlow.pickClient")}</option>
               {(Array.isArray(clients) ? clients : []).map((c) => (
-                <option key={c._id} value={c._id}>
+                <option key={String(c._id)} value={c._id}>
                   {safeText(c.name, "—")}
                 </option>
               ))}
@@ -200,7 +293,7 @@ export default function NewSaleModal({
               id="sale-qty"
               type="number"
               min={1}
-              max={stock > 0 ? stock : undefined}
+              max={stockAvailable > 0 ? stockAvailable : undefined}
               step={1}
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
@@ -209,14 +302,14 @@ export default function NewSaleModal({
             {product ? (
               <p className="erp-card-hint">
                 {t("saleFlow.stock")}:{" "}
-                <span className="erp-num">{formatNumber(stock)}</span>
+                <span className="erp-num">{formatNumber(stockAvailable)}</span>
               </p>
             ) : null}
           </div>
 
           <div className="erp-field">
             <span className="erp-card-label">{t("saleFlow.listPrice")}</span>
-            <p className="erp-sale-flow-num erp-num">{formatNumber(listPrice)}</p>
+            <p className="erp-sale-flow-num erp-num">{formatMoneyDZD(listPrice)}</p>
           </div>
 
           <div className="erp-field">
@@ -235,7 +328,7 @@ export default function NewSaleModal({
           <div className="erp-field erp-sale-flow-total">
             <span className="erp-card-label">{t("saleFlow.lineTotal")}</span>
             <p className="erp-sale-flow-num erp-num erp-sale-flow-total-val">
-              {formatNumber(lineTotal)}
+              {formatMoneyDZD(lineTotal)}
             </p>
           </div>
 
@@ -284,8 +377,9 @@ export default function NewSaleModal({
             ) : null}
           </fieldset>
         </div>
+        </div>
 
-        <div className="erp-modal__actions">
+        <div className="erp-modal__actions erp-sale-modal__actions">
           <button
             type="button"
             className="erp-btn erp-btn-ghost"
@@ -306,11 +400,13 @@ export default function NewSaleModal({
                 {t("saleFlow.saving")}
               </>
             ) : (
-              t("saleFlow.submit")
+              isEdit ? t("saleFlow.updateSubmit") : t("saleFlow.submit")
             )}
           </button>
         </div>
       </div>
     </div>
   );
+
+  return createPortal(modal, document.body);
 }

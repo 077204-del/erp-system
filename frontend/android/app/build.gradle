@@ -1,5 +1,11 @@
 apply plugin: 'com.android.application'
 
+def keystorePropsFile = rootProject.file("keystore.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystoreProps.load(new FileInputStream(keystorePropsFile))
+}
+
 android {
     namespace "com.erp.store"
     compileSdk rootProject.ext.compileSdkVersion
@@ -16,10 +22,25 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (keystorePropsFile.exists()) {
+                def storeRel = keystoreProps.getProperty("storeFile", "release-key.jks")
+                storeFile rootProject.file(storeRel)
+                storePassword keystoreProps["storePassword"]
+                keyAlias keystoreProps.getProperty("keyAlias", "release")
+                keyPassword keystoreProps["keyPassword"]
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
+            shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig keystorePropsFile.exists()
+                    ? signingConfigs.release
+                    : signingConfigs.debug
         }
     }
 }
@@ -51,4 +72,8 @@ try {
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
+
+if (!keystorePropsFile.exists()) {
+    logger.lifecycle("Release signing: android/keystore.properties not found — using debug keystore for assembleRelease (OK for local adb install; use release-key.jks + keystore.properties for store signing).")
 }

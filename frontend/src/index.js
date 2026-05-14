@@ -3,6 +3,11 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import { initMobileBoot } from './mobileBoot';
+import { initOfflineBootstrap } from './offline/offlineBootstrap';
+
+initMobileBoot();
+initOfflineBootstrap();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

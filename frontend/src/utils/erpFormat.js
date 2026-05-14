@@ -17,6 +17,11 @@ export function formatNumber(v) {
   }).format(safeNum(v, 0));
 }
 
+/** Money amounts (Algeria DZD) — use for prices/totals; keep {@link formatNumber} for qty/counts. */
+export function formatMoneyDZD(v) {
+  return `${formatNumber(v)} DZD`;
+}
+
 export function sumSaleTotals(sales) {
   if (!Array.isArray(sales)) return 0;
   return sales.reduce((acc, s) => acc + safeNum(s?.total, 0), 0);

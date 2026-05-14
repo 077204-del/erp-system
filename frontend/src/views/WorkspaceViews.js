@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import api from "../api";
 import ErpDataTable from "../components/ErpDataTable";
 import ErpModuleFooter from "../components/ErpModuleFooter";
@@ -9,6 +10,7 @@ import { useErpUi } from "../context/ErpUiContext";
 import { useLocale } from "../context/LocaleContext";
 import {
   apiErrorMessage,
+  formatMoneyDZD,
   formatNumber,
   safeNum,
   safeText,
@@ -134,7 +136,7 @@ export function DashboardView({
             <>
               <KpiCard
                 label={t("dashboard.totalSales")}
-                value={formatNumber(totalSalesKpi)}
+                value={formatMoneyDZD(totalSalesKpi)}
                 hint={t("dashboard.totalSalesHint")}
                 tone="blue"
               />
@@ -148,26 +150,28 @@ export function DashboardView({
                 <>
                   <KpiCard
                     label={t("dashboard.profit")}
-                    value={formatNumber(safeNum(dashboard?.profit, 0))}
+                    value={formatMoneyDZD(safeNum(dashboard?.profit, 0))}
                     hint={t("dashboard.profitHint")}
                     tone="violet"
                   />
                   <KpiCard
                     label={t("dashboard.debt")}
-                    value={formatNumber(safeNum(dashboard?.debt, 0))}
+                    value={formatMoneyDZD(safeNum(dashboard?.debt, 0))}
                     hint={t("dashboard.debtHint")}
                     tone="amber"
                   />
                   <KpiCard
                     label={t("dashboard.totalExpenses")}
-                    value={formatNumber(dashboard.totalExpenses ?? 0)}
+                    value={formatMoneyDZD(dashboard.totalExpenses ?? 0)}
                     hint={t("dashboard.totalExpensesHint")}
                     tone="slate"
                   />
                   <KpiCard
-                    label={t("dashboard.netProfit")}
-                    value={formatNumber(dashboard.netProfit ?? 0)}
-                    hint={t("dashboard.netProfitHint")}
+                    label={t("dashboard.netCashFlow")}
+                    value={formatMoneyDZD(
+                      safeNum(dashboard?.netCashFlow, 0)
+                    )}
+                    hint={t("dashboard.netCashFlowHint")}
                     tone="cyan"
                   />
                 </>
@@ -186,7 +190,7 @@ export function DashboardView({
                 <div>
                   <p className="erp-cash-flow__label">{t("dashboard.fromSales")}</p>
                   <p className="erp-cash-flow__value">
-                    {formatNumber(cash.cashSales)}
+                    {formatMoneyDZD(cash.cashSales)}
                   </p>
                 </div>
                 <div>
@@ -194,7 +198,7 @@ export function DashboardView({
                     {t("dashboard.debtPayments")}
                   </p>
                   <p className="erp-cash-flow__value">
-                    {formatNumber(cash.debtPayments)}
+                    {formatMoneyDZD(cash.debtPayments)}
                   </p>
                 </div>
                 <div className="erp-cash-flow__total">
@@ -202,7 +206,7 @@ export function DashboardView({
                     {t("dashboard.totalCashIn")}
                   </p>
                   <p className="erp-cash-flow__value erp-cash-flow__value--lg">
-                    {formatNumber(cash.totalCashIn)}
+                    {formatMoneyDZD(cash.totalCashIn)}
                   </p>
                 </div>
               </div>
@@ -255,10 +259,13 @@ export function SalesView({
   clients,
   onRefreshWorkspace,
   canCreateSales = true,
+  canEditSales = false,
+  canDeleteSales = false,
 }) {
   const { t } = useLocale();
-  const { toast } = useErpUi();
+  const { toast, confirm } = useErpUi();
   const [saleModalOpen, setSaleModalOpen] = useState(false);
+  const [editingSale, setEditingSale] = useState(null);
 
   const columns = [
     {
@@ -276,8 +283,72 @@ export function SalesView({
     },
     { key: "quantity", header: "Qty", numeric: true },
     { key: "status", header: "Status", render: (r) => safeText(r.status, "—") },
-    { key: "debt", header: "Debt", numeric: true },
-    { key: "total", header: "Total", numeric: true },
+    { key: "debt", header: "Debt", numeric: true, currency: true },
+    { key: "total", header: "Total", numeric: true, currency: true },
+    ...(canEditSales || canDeleteSales
+      ? [
+          {
+            key: "actions",
+            header: "",
+            clip: false,
+            render: (r) => (
+              <div className="erp-table-actions">
+                {canEditSales ? (
+                  <button
+                    type="button"
+                    className="erp-btn erp-btn-ghost erp-btn-sm"
+                    onClick={() => {
+                      setEditingSale(r);
+                      setSaleModalOpen(true);
+                    }}
+                  >
+                    {t("saleFlow.edit")}
+                  </button>
+                ) : null}
+                {canDeleteSales ? (
+                  <button
+                    type="button"
+                    className="erp-btn erp-btn-danger erp-btn-sm"
+                    onClick={() => {
+                      confirm({
+                        title: t("saleFlow.deleteTitle"),
+                        message: safeText(
+                          r.productId && r.productId.name != null
+                            ? r.productId.name
+                            : r._id,
+                          "—"
+                        ),
+                        danger: true,
+                        confirmLabel: t("saleFlow.deleteConfirm"),
+                        onConfirm: async () => {
+                          try {
+                            await api.delete(
+                            `/api/sales/${encodeURIComponent(String(r._id))}`
+                          );
+                            toast.success(t("saleFlow.deleted"));
+                            if (typeof onRefreshWorkspace === "function") {
+                              onRefreshWorkspace();
+                            }
+                          } catch (err) {
+                            const st = err.response && err.response.status;
+                            const msg =
+                              st === 403
+                                ? t("saleFlow.deleteForbidden")
+                                : apiErrorMessage(err);
+                            toast.error(msg, t("saleFlow.deleteTitle"));
+                          }
+                        },
+                      });
+                    }}
+                  >
+                    {t("saleFlow.delete")}
+                  </button>
+                ) : null}
+              </div>
+            ),
+          },
+        ]
+      : []),
   ];
 
   const rows = sales.map((s) => ({
@@ -285,28 +356,41 @@ export function SalesView({
     product: s.productId?.name,
   }));
 
+  const fab =
+    canCreateSales &&
+    createPortal(
+      <button
+        type="button"
+        className="erp-fab erp-fab--sales"
+        onClick={() => {
+          setEditingSale(null);
+          setSaleModalOpen(true);
+        }}
+        disabled={loading && !initialSyncDone}
+        aria-haspopup="dialog"
+        aria-expanded={saleModalOpen}
+      >
+        {t("saleFlow.fab")}
+      </button>,
+      document.body
+    );
+
   return (
-    <section className="erp-section erp-section-flush-top">
-      {canCreateSales ? (
-        <button
-          type="button"
-          className="erp-fab"
-          onClick={() => setSaleModalOpen(true)}
-          disabled={loading && !initialSyncDone}
-          aria-haspopup="dialog"
-          aria-expanded={saleModalOpen}
-        >
-          {t("saleFlow.fab")}
-        </button>
-      ) : (
+    <section className="erp-section erp-section-flush-top erp-sales-module erp-sales-view-shell">
+      {canCreateSales ? fab : (
         <p className="erp-page-lead erp-rbac-banner" role="note">
           {t("rbac.noCreateSales")}
         </p>
       )}
+      {!canEditSales && !canDeleteSales ? (
+        <p className="erp-card-hint erp-sales-perm-hint" role="note">
+          {t("saleFlow.readOnlyOpsHint")}
+        </p>
+      ) : null}
       <ErpDataTable
         columns={columns}
         rows={rows}
-        getRowId={(r) => r._id}
+        getRowId={(r) => String(r?._id ?? "")}
         pageSize={10}
         loading={loading}
         showSkeleton={!initialSyncDone}
@@ -315,12 +399,20 @@ export function SalesView({
         searchPlaceholder="Search sales…"
       />
       <NewSaleModal
-        open={canCreateSales && saleModalOpen}
-        onClose={() => setSaleModalOpen(false)}
+        open={
+          saleModalOpen &&
+          ((canCreateSales && !editingSale) || (canEditSales && editingSale))
+        }
+        onClose={() => {
+          setSaleModalOpen(false);
+          setEditingSale(null);
+        }}
         products={products}
         clients={clients}
         onSuccess={onRefreshWorkspace}
         toast={toast}
+        mode={editingSale ? "edit" : "create"}
+        editSale={editingSale}
       />
       <ErpModuleFooter />
     </section>
@@ -362,8 +454,8 @@ export function ProductsView({
       render: (r) => safeText(r.category, "—"),
     },
     { key: "qty", header: t("productForm.stock"), numeric: true },
-    { key: "salePrice", header: t("productForm.sellingPrice"), numeric: true },
-    { key: "costPrice", header: t("productForm.purchasePrice"), numeric: true },
+    { key: "salePrice", header: t("productForm.sellingPrice"), numeric: true, currency: true },
+    { key: "costPrice", header: t("productForm.purchasePrice"), numeric: true, currency: true },
     {
       key: "lowStockThreshold",
       header: t("productForm.minimumStock"),
@@ -414,7 +506,9 @@ export function ProductsView({
                       confirmLabel: t("productForm.deleteConfirm"),
                       onConfirm: async () => {
                         try {
-                          await api.delete(`/api/products/${r._id}`);
+                          await api.delete(
+                            `/api/products/${encodeURIComponent(String(r._id))}`
+                          );
                           toast.success(t("productForm.deleted"));
                           if (typeof onRefreshWorkspace === "function") {
                             onRefreshWorkspace();
@@ -468,7 +562,7 @@ export function ProductsView({
       <ErpDataTable
         columns={columns}
         rows={products}
-        getRowId={(r) => r._id}
+        getRowId={(r) => String(r?._id ?? "")}
         pageSize={12}
         loading={loading}
         showSkeleton={!initialSyncDone}
@@ -543,7 +637,7 @@ export function ClientsView({
         return n.length > 40 ? `${n.slice(0, 40)}…` : n || "—";
       },
     },
-    { key: "totalDebt", header: t("clientForm.colDebt"), numeric: true },
+    { key: "totalDebt", header: t("clientForm.colDebt"), numeric: true, currency: true },
     ...(canManageClients
       ? [
           {
@@ -574,7 +668,9 @@ export function ClientsView({
                       confirmLabel: t("clientForm.deleteConfirm"),
                       onConfirm: async () => {
                         try {
-                          await api.delete(`/api/clients/${r._id}`);
+                          await api.delete(
+                            `/api/clients/${encodeURIComponent(String(r._id))}`
+                          );
                           toast.success(t("clientForm.deleted"));
                           if (typeof onRefreshWorkspace === "function") {
                             onRefreshWorkspace();
@@ -628,7 +724,7 @@ export function ClientsView({
       <ErpDataTable
         columns={columns}
         rows={clients}
-        getRowId={(r) => r._id}
+        getRowId={(r) => String(r?._id ?? "")}
         pageSize={12}
         loading={loading}
         showSkeleton={!initialSyncDone}
@@ -711,8 +807,12 @@ export function PaymentsView({
         if (!Number.isNaN(d.getTime())) body.date = d.toISOString();
       }
       if (collectSaleId) body.saleId = collectSaleId;
-      await api.post("/api/payments", body);
-      toast.success(t("paymentCollect.success"), t("paymentCollect.title"));
+      const res = await api.post("/api/payments", body);
+      if (res.data && res.data.offlineQueued) {
+        toast.info(t("app.offlineQueued"), t("paymentCollect.title"));
+      } else {
+        toast.success(t("paymentCollect.success"), t("paymentCollect.title"));
+      }
       setCollectAmount("");
       setCollectSaleId("");
       if (typeof onRefreshWorkspace === "function") onRefreshWorkspace();
@@ -734,7 +834,7 @@ export function PaymentsView({
       searchAccessor: (r) => r.recordedAt || r.createdAt,
       render: (r) => formatDate(r.recordedAt || r.createdAt),
     },
-    { key: "amount", header: "Amount", numeric: true },
+    { key: "amount", header: "Amount", numeric: true, currency: true },
     {
       key: "method",
       header: "Method",
@@ -817,7 +917,7 @@ export function PaymentsView({
               {openSalesForClient.map((s) => (
                 <option key={s._id} value={s._id}>
                   {safeText(s.productId?.name, "—")} ·{" "}
-                  {formatNumber(s.debt)} {t("dashboard.debt")}
+                  {formatMoneyDZD(s.debt)} {t("dashboard.debt")}
                 </option>
               ))}
             </select>
@@ -875,7 +975,7 @@ export function PaymentsView({
       <ErpDataTable
         columns={columns}
         rows={payments}
-        getRowId={(r) => r._id}
+        getRowId={(r) => String(r?._id ?? "")}
         pageSize={12}
         loading={loading}
         showSkeleton={!initialSyncDone}

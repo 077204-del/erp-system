@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import api from "../api";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 import { apiErrorMessage, safeText } from "../utils/erpFormat";
 
 export default function ClientFormModal({
@@ -33,6 +35,8 @@ export default function ClientFormModal({
     }
   }, [open, mode, client]);
 
+  useBodyScrollLock(open);
+
   const submit = async () => {
     const n = fullName.trim();
     if (!n) {
@@ -49,11 +53,19 @@ export default function ClientFormModal({
     setSaving(true);
     try {
       if (mode === "edit" && client && client._id) {
-        await api.put(`/api/clients/${client._id}`, body);
-        toast.success(t("clientForm.updated"));
+        const res = await api.put(`/api/clients/${client._id}`, body);
+        if (res.data && res.data.offlineQueued) {
+          toast.info(t("app.offlineQueued"), t("clientForm.title"));
+        } else {
+          toast.success(t("clientForm.updated"));
+        }
       } else {
-        await api.post("/api/clients", body);
-        toast.success(t("clientForm.created"));
+        const res = await api.post("/api/clients", body);
+        if (res.data && res.data.offlineQueued) {
+          toast.info(t("app.offlineQueued"), t("clientForm.title"));
+        } else {
+          toast.success(t("clientForm.created"));
+        }
       }
       onClose();
       if (typeof onSaved === "function") onSaved();
@@ -73,7 +85,7 @@ export default function ClientFormModal({
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
       className="erp-modal-backdrop"
       role="presentation"
@@ -82,58 +94,60 @@ export default function ClientFormModal({
       }}
     >
       <div
-        className="erp-modal erp-modal--wide"
+        className="erp-modal erp-modal--wide erp-modal-form-shell"
         role="dialog"
         aria-modal="true"
         aria-labelledby="client-form-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="client-form-title" className="erp-modal__title">
-          {mode === "edit" ? t("clientForm.editTitle") : t("clientForm.addTitle")}
-        </h2>
-        <div className="erp-sale-flow-grid">
-          <div className="erp-field">
-            <label htmlFor="cf-name">{t("clientForm.fullName")}</label>
-            <input
-              id="cf-name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              disabled={saving}
-              autoComplete="name"
-            />
-          </div>
-          <div className="erp-field">
-            <label htmlFor="cf-phone">{t("clientForm.phone")}</label>
-            <input
-              id="cf-phone"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              disabled={saving}
-              autoComplete="tel"
-            />
-          </div>
-          <div className="erp-field erp-field--full">
-            <label htmlFor="cf-addr">{t("clientForm.address")}</label>
-            <input
-              id="cf-addr"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              disabled={saving}
-              autoComplete="street-address"
-            />
-          </div>
-          <div className="erp-field erp-field--full">
-            <label htmlFor="cf-notes">{t("clientForm.notes")}</label>
-            <textarea
-              id="cf-notes"
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              disabled={saving}
-            />
+        <div className="erp-modal-form-shell__scroll">
+          <h2 id="client-form-title" className="erp-modal__title">
+            {mode === "edit" ? t("clientForm.editTitle") : t("clientForm.addTitle")}
+          </h2>
+          <div className="erp-sale-flow-grid">
+            <div className="erp-field">
+              <label htmlFor="cf-name">{t("clientForm.fullName")}</label>
+              <input
+                id="cf-name"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                disabled={saving}
+                autoComplete="name"
+              />
+            </div>
+            <div className="erp-field">
+              <label htmlFor="cf-phone">{t("clientForm.phone")}</label>
+              <input
+                id="cf-phone"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                disabled={saving}
+                autoComplete="tel"
+              />
+            </div>
+            <div className="erp-field erp-field--full">
+              <label htmlFor="cf-addr">{t("clientForm.address")}</label>
+              <input
+                id="cf-addr"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                disabled={saving}
+                autoComplete="street-address"
+              />
+            </div>
+            <div className="erp-field erp-field--full">
+              <label htmlFor="cf-notes">{t("clientForm.notes")}</label>
+              <textarea
+                id="cf-notes"
+                rows={3}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                disabled={saving}
+              />
+            </div>
           </div>
         </div>
-        <div className="erp-modal__actions">
+        <div className="erp-modal__actions erp-modal-form-shell__actions">
           <button
             type="button"
             className="erp-btn erp-btn-ghost"
@@ -161,6 +175,7 @@ export default function ClientFormModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
