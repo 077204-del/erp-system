@@ -1,6 +1,7 @@
 const {
   getDashboardStats,
   getTotalOutstandingDebtFromLedger,
+  getInventoryCapital,
 } = require("../services/finance/ledger.service");
 const { sumExpensesForRange } = require("../services/expenseQuery.service");
 
@@ -15,15 +16,27 @@ function safeString(v, fallback = "") {
   return String(v);
 }
 
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function canViewFinancialDashboard(req) {
   const user = req && req.user ? req.user : null;
   if (!user) return false;
-  if (String(user.role || "").toLowerCase() === "admin") return true;
+  const role = String(user.role || "").toLowerCase();
+  if (role === "admin" || role === "manager") return true;
   const perms =
     user.permissions && typeof user.permissions === "object"
       ? user.permissions
       : {};
-  return perms.canViewReports === true;
+  if (perms.canViewReports === true) return true;
+  return role === "cashier";
+}
+
+function isAdminUser(req) {
+  const user = req && req.user ? req.user : null;
+  if (!user) return false;
+  return String(user.role || "").toLowerCase() === "admin";
 }
 
 /**
@@ -38,7 +51,14 @@ function canViewFinancialDashboard(req) {
  */
 exports.getDashboard = async (req, res) => {
   try {
-    const { from, to } = req.query;
+    let { from, to } = req.query;
+    const role = String(req.user && req.user.role ? req.user.role : "").toLowerCase();
+    if (role === "cashier") {
+      const day = todayISO();
+      from = day;
+      to = day;
+    }
+
     const dashboard = await getDashboardStats(from, to);
 
     const rangeFrom = safeString(
@@ -57,12 +77,12 @@ exports.getDashboard = async (req, res) => {
       totalExpensesRaw = 0;
     }
 
-    const stats = dashboard.stats || {};
+    const dbStats = dashboard.stats || {};
     const cash = dashboard.cash || {};
 
-    const sales = safeNum(stats.sales);
-    const totalSales = safeNum(stats.revenue);
-    const accrualProfit = safeNum(stats.profit);
+    const sales = safeNum(dbStats.sales);
+    const totalSales = safeNum(dbStats.revenue);
+    const accrualProfit = safeNum(dbStats.profit);
     const cashIn = safeNum(cash.totalCashIn);
     const totalExpenses = safeNum(totalExpensesRaw);
     const totalDebt = safeNum(await getTotalOutstandingDebtFromLedger());
@@ -72,20 +92,35 @@ exports.getDashboard = async (req, res) => {
     const debtPayments = safeNum(cash.debtPayments);
 
     const financialAllowed = canViewFinancialDashboard(req);
+    const adminUser = isAdminUser(req);
+    let inventoryCapital = null;
+    if (adminUser) {
+      try {
+        inventoryCapital = safeNum(await getInventoryCapital());
+      } catch {
+        inventoryCapital = 0;
+      }
+    }
+
+    const responseStats = {
+      sales,
+      totalSales,
+      totalExpenses: financialAllowed ? totalExpenses : 0,
+      totalDebt: financialAllowed ? totalDebt : 0,
+      cashIn: financialAllowed ? cashIn : 0,
+      netProfit: financialAllowed ? netProfit : 0,
+      profit: financialAllowed ? accrualProfit : 0,
+    };
+    if (adminUser) {
+      responseStats.inventoryCapital = inventoryCapital;
+    }
+
     const response = {
       range: dashboard.range || {
         from: safeString(from, ""),
         to: safeString(to, ""),
       },
-      stats: {
-        sales,
-        totalSales,
-        totalExpenses: financialAllowed ? totalExpenses : 0,
-        totalDebt: financialAllowed ? totalDebt : 0,
-        cashIn: financialAllowed ? cashIn : 0,
-        netProfit: financialAllowed ? netProfit : 0,
-        profit: financialAllowed ? accrualProfit : 0,
-      },
+      stats: responseStats,
       cash: {
         cashSales: financialAllowed ? cashSales : 0,
         debtPayments: financialAllowed ? debtPayments : 0,
@@ -94,6 +129,7 @@ exports.getDashboard = async (req, res) => {
       debt: financialAllowed ? totalDebt : 0,
       access: {
         financial: financialAllowed,
+        inventoryCapital: adminUser,
       },
     };
 
@@ -122,6 +158,10 @@ exports.getDashboard = async (req, res) => {
         totalCashIn: 0,
       },
       debt: 0,
+      access: {
+        financial: false,
+        inventoryCapital: false,
+      },
     });
   }
 };

@@ -19,6 +19,7 @@ function safeNum(v) {
 }
 
 function paymentStatusFromSaleStatus(status) {
+  if (status === "VOID") return "voided";
   if (status === "PAID") return "paid";
   if (status === "PARTIAL") return "partial";
   return "unpaid";

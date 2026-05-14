@@ -54,8 +54,17 @@ exports.getReports = async (req, res) => {
   try {
     const { from, to } = req.query;
     const today = new Date().toISOString().slice(0, 10);
-    const f = safeString(from, "") || today;
-    const t = safeString(to, "") || f;
+    let f = safeString(from, "") || today;
+    let t = safeString(to, "") || f;
+
+    const role = String(req.user && req.user.role ? req.user.role : "").toLowerCase();
+    if (role === "cashier" && (f !== today || t !== today)) {
+      return res.status(403).json({
+        message:
+          "Cashiers may only run reports for the current business day.",
+        allowedRange: { from: today, to: today },
+      });
+    }
 
     const dash = await getDashboardStats(f, t);
     const sales = await getSalesList(f, t);

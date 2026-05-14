@@ -330,6 +330,267 @@ async function writeCreateSale(input) {
 }
 
 /**
+ * Replace a sale line (same _id, same saleDate / cashierId) when at most one
+ * payment row exists for the sale. Reverses prior stock, reapplies new line
+ * stock and financials, then rebuilds the single initial SALE_PAYMENT if any.
+ */
+async function writeUpdateSaleById(saleId, input, userId = null) {
+  const {
+    productId,
+    clientId,
+    quantity,
+    paidAmount: paidAmountInput = 0,
+    paymentMethod: paymentMethodInput = "CASH",
+    negotiatedUnitPrice,
+    agreedUnitPrice,
+    paymentType,
+  } = input;
+
+  const negotiated =
+    negotiatedUnitPrice != null ? negotiatedUnitPrice : agreedUnitPrice;
+
+  if (!clientId || clientId === "") {
+    return {
+      ok: false,
+      status: 400,
+      body: { message: "Client is required" },
+    };
+  }
+
+  if (!productId || quantity == null) {
+    return {
+      ok: false,
+      status: 400,
+      body: { message: "Missing product or quantity" },
+    };
+  }
+
+  const qty = Number(quantity);
+  if (isNaN(qty) || qty <= 0) {
+    return {
+      ok: false,
+      status: 400,
+      body: { message: "Invalid quantity" },
+    };
+  }
+
+  let saleOut = null;
+  const syncClientIds = new Set();
+
+  const txnResult = await runWriteTransaction(async (session) => {
+    const sale = await Sale.findById(saleId).session(session);
+    if (!sale) {
+      throw new WriteFlowError(404, { message: "Sale not found" });
+    }
+
+    if (sale.voided === true || String(sale.status || "") === "VOID") {
+      throw new WriteFlowError(400, {
+        message: "Cannot edit a voided sale",
+        code: "SALE_VOIDED",
+      });
+    }
+
+    if (sale.clientId) {
+      syncClientIds.add(String(sale.clientId));
+    }
+
+    const linkedPayments = await Payment.find({ saleId: sale._id })
+      .session(session)
+      .lean();
+    if (linkedPayments.length > 1) {
+      throw new WriteFlowError(400, {
+        message:
+          "Cannot edit this sale because multiple payments are linked to it. Record a correction or void the sale instead.",
+        code: "SALE_EDIT_PAYMENT_CONFLICT",
+      });
+    }
+    if (linkedPayments.length === 1) {
+      const p0 = linkedPayments[0];
+      if (Math.abs(num(p0.amount) - num(sale.paidAmount)) > 0.01) {
+        throw new WriteFlowError(400, {
+          message:
+            "Recorded payments do not match this sale line; editing is blocked for safety.",
+          code: "SALE_EDIT_PAYMENT_MISMATCH",
+        });
+      }
+    }
+
+    await Payment.deleteMany({ saleId: sale._id }, { session });
+
+    const oldProductId = sale.productId;
+    const oldQty = num(sale.quantity);
+
+    const oldProduct = await Product.findById(oldProductId).session(session);
+    if (!oldProduct) {
+      throw new WriteFlowError(404, { message: "Original product not found" });
+    }
+
+    const oldProdQtyBefore = num(oldProduct.qty);
+    oldProduct.qty = oldProdQtyBefore + oldQty;
+    await oldProduct.save({ session });
+
+    await recordStockMovement(
+      {
+        productId: oldProductId,
+        movementType: "MANUAL_ADD",
+        qtyBefore: oldProdQtyBefore,
+        qtyChange: oldQty,
+        qtyAfter: oldProdQtyBefore + oldQty,
+        userId: userId || null,
+        saleId: sale._id,
+        reason: "SALE_EDIT_RESTORE",
+      },
+      session
+    );
+
+    const newProduct = await Product.findById(productId).session(session);
+    if (!newProduct) {
+      throw new WriteFlowError(404, { message: "Product not found" });
+    }
+
+    const newProdQtyBefore = num(newProduct.qty);
+    if (newProdQtyBefore < qty) {
+      throw new WriteFlowError(400, {
+        message: "Not enough stock",
+        code: "INSUFFICIENT_STOCK",
+        available: newProdQtyBefore,
+      });
+    }
+
+    const listPrice = num(newProduct.salePrice);
+    const neg = num(negotiated);
+    let unitPrice = listPrice;
+    if (Number.isFinite(neg) && neg > 0) {
+      unitPrice = neg;
+    }
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      throw new WriteFlowError(400, { message: "Invalid unit price" });
+    }
+    if (unitPrice > 1e15) {
+      unitPrice = 1e15;
+    }
+
+    const total = unitPrice * qty;
+
+    let paymentMethod = paymentMethodInput;
+    let paid = num(paidAmountInput);
+    const ptype =
+      paymentType != null ? String(paymentType).toLowerCase() : null;
+
+    if (ptype === "cash") {
+      paid = total;
+      if (paymentMethod !== "CARD") paymentMethod = "CASH";
+    } else if (ptype === "credit") {
+      paid = 0;
+      paymentMethod = "DEBT";
+    } else if (ptype === "partial") {
+      paid = num(paidAmountInput);
+      paymentMethod = "CASH";
+    }
+
+    if (paid < 0) paid = 0;
+    if (paid > total) paid = total;
+
+    if (ptype === "partial" && (paid <= 0 || paid >= total)) {
+      throw new WriteFlowError(400, {
+        message:
+          "Partial payment requires paidAmount strictly between 0 and line total",
+      });
+    }
+
+    const debt = Math.max(total - paid, 0);
+    const finalStatus = saleStatusFromAmounts(total, paid, debt);
+    const costPrice = num(newProduct.costPrice);
+    const profit = (unitPrice - costPrice) * qty;
+
+    const dec = await Product.updateOne(
+      { _id: productId, qty: { $gte: qty } },
+      { $inc: { qty: -qty } },
+      { session }
+    );
+
+    if (dec.modifiedCount !== 1) {
+      const snap = await Product.findById(productId).session(session).lean();
+      throw new WriteFlowError(400, {
+        message: "Not enough stock",
+        code: "INSUFFICIENT_STOCK",
+        available: snap != null ? num(snap.qty) : 0,
+      });
+    }
+
+    await recordStockMovement(
+      {
+        productId,
+        movementType: "SALE_OUT",
+        qtyBefore: newProdQtyBefore,
+        qtyChange: -qty,
+        qtyAfter: newProdQtyBefore - qty,
+        userId: userId || null,
+        saleId: sale._id,
+        reason: "SALE_OUT",
+      },
+      session
+    );
+
+    sale.productId = productId;
+    sale.clientId = clientId;
+    sale.quantity = qty;
+    sale.unitPrice = unitPrice;
+    sale.total = total;
+    sale.paidAmount = paid;
+    sale.debt = debt;
+    sale.status = finalStatus;
+    sale.profit = profit;
+    sale.paymentMethod = paymentMethod;
+
+    await sale.save({ session });
+
+    if (paid > 0) {
+      await Payment.create(
+        [
+          {
+            clientId: sale.clientId,
+            saleId: sale._id,
+            amount: paid,
+            type: "SALE_PAYMENT",
+            method: paymentMethodForInflow(paymentMethod, paid),
+            recordedAt: sale.saleDate || new Date(),
+          },
+        ],
+        { session }
+      );
+    }
+
+    if (sale.clientId) {
+      syncClientIds.add(String(sale.clientId));
+    }
+
+    saleOut = sale;
+  });
+
+  if (!txnResult.ok) {
+    return txnResult;
+  }
+
+  for (const cid of syncClientIds) {
+    const syncRes = await writeSyncClientDebtCache(cid);
+    if (!syncRes.ok) {
+      console.error(
+        "[ERP CACHE DRIFT RISK] writeUpdateSaleById committed but cache sync failed",
+        { clientId: cid, saleId: String(saleId), ...syncRes.body }
+      );
+      return {
+        ok: false,
+        status: syncRes.status || 500,
+        body: syncRes.body || { message: "Failed to sync client debt cache" },
+      };
+    }
+  }
+
+  return { ok: true, sale: saleOut };
+}
+
+/**
  * Apply a payment to a sale: Payment row + Sale amounts + Client.totalDebt.
  * Caps to current sale.debt (same as legacy paySale). Rejects zero/negative effective amount.
  *
@@ -368,6 +629,13 @@ async function writeApplyPaymentToSale(input) {
     const sale = await Sale.findById(saleId).session(session);
     if (!sale) {
       throw new WriteFlowError(404, { message: "Sale not found" });
+    }
+
+    if (sale.voided === true || String(sale.status || "") === "VOID") {
+      throw new WriteFlowError(400, {
+        message: "Cannot pay a voided sale",
+        code: "SALE_VOIDED",
+      });
     }
 
     const outstanding = num(sale.debt);
@@ -514,6 +782,12 @@ async function writeApplyClientDebtPayment(input) {
       if (!primary) {
         throw new WriteFlowError(404, { message: "Sale not found" });
       }
+      if (primary.voided === true || String(primary.status || "") === "VOID") {
+        throw new WriteFlowError(400, {
+          message: "Cannot apply payment to a voided sale",
+          code: "SALE_VOIDED",
+        });
+      }
       if (String(primary.clientId) !== cid) {
         throw new WriteFlowError(400, {
           message: "Sale does not belong to this client",
@@ -522,6 +796,7 @@ async function writeApplyClientDebtPayment(input) {
       const rest = await Sale.find({
         clientId: cid,
         debt: { $gt: 0 },
+        voided: { $ne: true },
         _id: { $ne: primary._id },
       })
         .sort({ saleDate: 1, createdAt: 1 })
@@ -529,7 +804,11 @@ async function writeApplyClientDebtPayment(input) {
 
       queue = num(primary.debt) > 0 ? [primary, ...rest] : [...rest];
     } else {
-      queue = await Sale.find({ clientId: cid, debt: { $gt: 0 } })
+      queue = await Sale.find({
+        clientId: cid,
+        debt: { $gt: 0 },
+        voided: { $ne: true },
+      })
         .sort({ saleDate: 1, createdAt: 1 })
         .session(session);
     }
@@ -616,13 +895,29 @@ async function writeApplyClientDebtPayment(input) {
   };
 }
 
-async function writeDeleteSaleById(saleId, userId = null) {
+async function writeVoidSaleById(saleId, userId, reason) {
+  const reasonStr =
+    reason != null && String(reason).trim() ? String(reason).trim() : "";
+  if (!reasonStr) {
+    return {
+      ok: false,
+      status: 400,
+      body: { message: "Void reason is required" },
+    };
+  }
+
   let clientIdForSync = null;
 
   const txnResult = await runWriteTransaction(async (session) => {
     const sale = await Sale.findById(saleId).session(session);
     if (!sale) {
       throw new WriteFlowError(404, { message: "Sale not found" });
+    }
+    if (sale.voided === true || String(sale.status || "") === "VOID") {
+      throw new WriteFlowError(400, {
+        message: "Sale is already voided",
+        code: "SALE_ALREADY_VOIDED",
+      });
     }
     clientIdForSync = sale.clientId;
 
@@ -647,12 +942,38 @@ async function writeDeleteSaleById(saleId, userId = null) {
         qtyAfter: qtyBefore + qty,
         userId: userId || null,
         saleId: sale._id,
-        reason: "SALE_DELETE",
+        reason: "SALE_VOID",
       },
       session
     );
 
-    await Sale.deleteOne({ _id: sale._id }).session(session);
+    sale.voidSnapshot = {
+      total: num(sale.total),
+      paidAmount: num(sale.paidAmount),
+      debt: num(sale.debt),
+      quantity: num(sale.quantity),
+      unitPrice: num(sale.unitPrice),
+      profit: num(sale.profit),
+      status: sale.status,
+      paymentMethod: sale.paymentMethod,
+      productId: sale.productId,
+      clientId: sale.clientId,
+    };
+
+    sale.total = 0;
+    sale.paidAmount = 0;
+    sale.debt = 0;
+    sale.profit = 0;
+    sale.quantity = 0;
+    sale.unitPrice = 0;
+    sale.status = "VOID";
+    sale.paymentMethod = "CASH";
+    sale.voided = true;
+    sale.voidedAt = new Date();
+    sale.voidedBy = userId || null;
+    sale.voidReason = reasonStr;
+
+    await sale.save({ session });
   });
 
   if (!txnResult.ok) {
@@ -687,7 +1008,11 @@ async function writeDeletePaymentById(paymentId) {
 
     if (payment.saleId) {
       const sale = await Sale.findById(payment.saleId).session(session);
-      if (sale) {
+      if (
+        sale &&
+        sale.voided !== true &&
+        String(sale.status || "") !== "VOID"
+      ) {
         sale.paidAmount = Math.max(num(sale.paidAmount) - amt, 0);
         sale.debt = Math.max(num(sale.total) - sale.paidAmount, 0);
         sale.status = saleStatusFromAmounts(
@@ -838,10 +1163,13 @@ async function writeRegisterUser({ username, password, role }) {
   }
 
   const hashed = await bcrypt.hash(password, 10);
+  const r = String(role || "").trim().toLowerCase();
+  const safeRole =
+    r === "admin" || r === "manager" || r === "cashier" ? r : "cashier";
   const user = await User.create({
     username,
     password: hashed,
-    role: role || "cashier",
+    role: safeRole,
   });
 
   return { ok: true, user };
@@ -849,9 +1177,10 @@ async function writeRegisterUser({ username, password, role }) {
 
 module.exports = {
   writeCreateSale,
+  writeUpdateSaleById,
   writeApplyPaymentToSale,
   writeApplyClientDebtPayment,
-  writeDeleteSaleById,
+  writeVoidSaleById,
   writeDeletePaymentById,
   writeSyncClientDebtCache,
   writeCreateClient,

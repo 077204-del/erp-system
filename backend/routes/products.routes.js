@@ -12,7 +12,7 @@ const auth = require("../middleware/auth.middleware");
 // cashier + admin
 router.get(
   "/",
-  auth(["admin", "cashier"]),
+  auth(["admin", "manager", "cashier"]),
   productController.getProducts
 );
 
@@ -20,7 +20,7 @@ router.get(
 // admin only
 router.post(
   "/",
-  auth(["admin", "cashier", "canManageProducts"]),
+  auth(["admin", "manager", "cashier", "canManageProducts"]),
   productController.createProduct
 );
 
@@ -28,7 +28,7 @@ router.post(
 // admin only
 router.put(
   "/:id",
-  auth(["admin", "cashier", "canManageProducts"]),
+  auth(["admin", "manager", "cashier", "canManageProducts"]),
   productController.updateProduct
 );
 
@@ -36,7 +36,7 @@ router.put(
 // admin only
 router.put(
   "/:id/stock",
-  auth(["admin", "cashier", "canManageProducts"]),
+  auth(["admin", "manager", "cashier", "canManageProducts"]),
   productController.updateStock
 );
 
@@ -44,7 +44,7 @@ router.put(
 // admin only
 router.delete(
   "/:id",
-  auth(["admin", "cashier", "canManageProducts"]),
+  auth(["admin", "manager", "cashier", "canManageProducts"]),
   productController.deleteProduct
 );
 

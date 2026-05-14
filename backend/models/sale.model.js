@@ -29,9 +29,20 @@ const saleSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["PAID", "DEBT", "PARTIAL", "UNPAID"],
+      enum: ["PAID", "DEBT", "PARTIAL", "UNPAID", "VOID"],
       default: "UNPAID",
     },
+
+    voided: { type: Boolean, default: false, index: true },
+    voidedAt: { type: Date, default: null },
+    voidedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    voidReason: { type: String, default: "", maxlength: 2000 },
+    /** Snapshot of monetary / line fields before void (audit). */
+    voidSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
 
     profit: { type: Number, default: 0 },
 
@@ -59,6 +70,7 @@ const saleSchema = new mongoose.Schema(
 /** API-facing status: paid | partial | unpaid (derived from legacy status enum). */
 saleSchema.virtual("paymentStatus").get(function () {
   const s = this.status;
+  if (s === "VOID" || this.voided === true) return "voided";
   if (s === "PAID") return "paid";
   if (s === "PARTIAL") return "partial";
   return "unpaid";

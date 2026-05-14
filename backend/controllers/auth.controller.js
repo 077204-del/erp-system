@@ -3,6 +3,10 @@ const jwt = require("jsonwebtoken");
 const { getUserByUsername } = require("../services/finance/ledger.service");
 const { writeRegisterUser } = require("../services/finance.write.service");
 const { appendAudit } = require("../services/auditLog.service");
+const {
+  permissionsForLoginUser,
+  normalizeRole,
+} = require("../services/rbac.service");
 
 function normalizePermissionMap(p = {}) {
   const src = p && typeof p === "object" ? p : {};
@@ -26,7 +30,7 @@ function normalizePermissionMap(p = {}) {
 exports.register = async (req, res) => {
   try {
     const { username, password, role } = req.body;
-    const safeRole = role === "admin" ? "admin" : "cashier";
+    const safeRole = normalizeRole(role);
 
     const reg = await writeRegisterUser({
       username,
@@ -55,7 +59,8 @@ exports.register = async (req, res) => {
       user: {
         id: String(user._id),
         username: user.username,
-        role: user.role === "admin" ? "admin" : "cashier",
+        role: normalizeRole(user.role),
+        permissions: normalizePermissionMap(permissionsForLoginUser(user)),
       },
     });
 
@@ -84,17 +89,15 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: "Wrong password" });
     }
 
-    const storedPerms = user.permissions;
-    const permissionsGranular =
-      storedPerms != null && typeof storedPerms === "object"
-        ? normalizePermissionMap(storedPerms)
-        : null;
+    const role = normalizeRole(user.role);
+    const permissionsGranular = normalizePermissionMap(
+      permissionsForLoginUser(user)
+    );
 
-    // create token
     const token = jwt.sign(
       {
         id: user._id,
-        role: user.role,   // 🔥 مهم جداً
+        role,
         permissions: permissionsGranular,
       },
       process.env.JWT_SECRET,
@@ -117,7 +120,7 @@ exports.login = async (req, res) => {
       user: {
         id: String(user._id),
         username: user.username,
-        role: user.role === "admin" ? "admin" : "cashier",
+        role,
         permissions: permissionsGranular,
       },
     });

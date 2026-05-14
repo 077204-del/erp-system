@@ -19,6 +19,15 @@ exports.getDailyRegister = async (req, res) => {
       date = new Date().toISOString().slice(0, 10);
     }
 
+    const role = String(req.user && req.user.role ? req.user.role : "").toLowerCase();
+    const today = new Date().toISOString().slice(0, 10);
+    if (role === "cashier" && date !== today) {
+      return res.status(403).json({
+        message: "Cashiers may only view today's register.",
+        allowedDate: today,
+      });
+    }
+
     const dash = await getDashboardStats(date, date);
 
     const salesTotal = toNumber(dash.stats && dash.stats.revenue);

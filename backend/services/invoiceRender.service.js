@@ -229,37 +229,106 @@ function renderThermalInvoiceHtml(sale) {
   const ctx = buildInvoiceContext(sale);
   const esc = escapeHtml;
 
-  const bodyLines = [
-    `<div class="line">${esc(ctx.companyName)}</div>`,
-    `<div class="sep">────────────────────────</div>`,
-    `<div class="line">${esc(TH_LABELS.inv)} <span class="ltr">${esc(ctx.invoiceNo)}</span></div>`,
-    `<div class="line muted">${esc(ctx.generatedAt)}</div>`,
-    `<div class="sep">────────────────────────</div>`,
-    `<div class="line">${esc(ctx.clientName)}</div>`,
-    `<div class="line">${esc(ctx.productName)}</div>`,
-    `<div class="line"><span class="ltr">×${ctx.quantity}</span> @ <span class="ltr">${esc(ctx.unitPrice)}</span></div>`,
-    `<div class="line"><b>${esc("الإجمالي")}</b> <span class="ltr">${esc(ctx.total)}</span></div>`,
-    `<div class="line">${esc(TH_LABELS.paid)} <span class="ltr">${esc(ctx.paid)}</span></div>`,
-    `<div class="line">${esc(TH_LABELS.due)} <span class="ltr">${esc(ctx.debt)}</span></div>`,
-    `<div class="line">${esc(TH_LABELS.st)} <span class="ltr">${esc(ctx.status)}</span></div>`,
-    `<div class="sep">────────────────────────</div>`,
-    `<div class="line center">${esc(TH_LABELS.thanks)}</div>`,
-  ];
+  const rows = [
+    `<tr><td colspan="2" class="th-cell th-title">${esc(TH_LABELS.inv)}</td></tr>`,
+    `<tr><td class="th-muted">${esc("المرجع")}</td><td class="th-num"><span class="ltr">${esc(ctx.invoiceNo)}</span></td></tr>`,
+    `<tr><td class="th-muted">${esc("التاريخ")}</td><td class="th-num ltr">${esc(ctx.generatedAt)}</td></tr>`,
+    `<tr><td colspan="2" class="th-gap"></td></tr>`,
+    `<tr><td colspan="2" class="th-section">${esc("العميل")}</td></tr>`,
+    `<tr><td colspan="2" class="th-wrap">${esc(ctx.clientName)}</td></tr>`,
+    `<tr><td colspan="2" class="th-section">${esc("الصنف")}</td></tr>`,
+    `<tr><td colspan="2" class="th-wrap">${esc(ctx.productName)}</td></tr>`,
+    `<tr><td>${esc("الكمية")}</td><td class="th-num ltr">×${esc(String(ctx.quantity))}</td></tr>`,
+    `<tr><td>${esc("سعر الوحدة")}</td><td class="th-num ltr">${esc(ctx.unitPrice)}</td></tr>`,
+    `<tr class="th-strong"><td>${esc("الإجمالي")}</td><td class="th-num ltr">${esc(ctx.total)}</td></tr>`,
+    `<tr><td>${esc(TH_LABELS.paid)}</td><td class="th-num ltr">${esc(ctx.paid)}</td></tr>`,
+    `<tr><td>${esc(TH_LABELS.due)}</td><td class="th-num ltr">${esc(ctx.debt)}</td></tr>`,
+    `<tr><td>${esc(TH_LABELS.st)}</td><td class="th-num ltr">${esc(ctx.status)}</td></tr>`,
+  ].join("");
 
-  const body = bodyLines.join("\n");
+  const body = `
+<div class="page">
+  <div class="receipt" role="document">
+    <div class="receipt__brand">${esc(ctx.companyName)}</div>
+    <div class="receipt__rule"></div>
+    <table class="receipt__table" cellpadding="0" cellspacing="0">${rows}</table>
+    <div class="receipt__rule"></div>
+    <p class="receipt__thanks">${esc(TH_LABELS.thanks)}</p>
+  </div>
+</div>`;
 
-  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(TH_LABELS.inv)}</title>
+  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"><title>${esc(TH_LABELS.inv)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600&family=Tajawal:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Tajawal:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  body { font-family: Cairo, Tajawal, Arial, sans-serif; font-size: 14px; max-width: 360px; margin: 12px auto; line-height: 1.45; }
-  .sep { text-align: center; color: #666; letter-spacing: -1px; margin: 0.35rem 0; }
-  .line { margin: 0.2rem 0; word-break: break-word; }
-  .muted { color: #555; font-size: 12px; }
-  .center { text-align: center; margin-top: 0.5rem; }
-  .ltr { direction: ltr; unicode-bidi: isolate; display: inline-block; }
-  @media print { body { margin: 0; max-width: none; } }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; width: 100%; min-height: 100%; background: var(--bg, #e8ecf2); }
+  .page {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  }
+  .receipt {
+    width: 100%;
+    max-width: 80mm;
+    margin: 0 auto;
+    background: #fff;
+    color: #0f2242;
+    border: 1px solid #c5ced9;
+    border-radius: 10px;
+    padding: 14px 16px 16px;
+    box-shadow: 0 6px 22px rgba(15, 34, 66, 0.1);
+    font-family: Cairo, Tajawal, Arial, sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .receipt__brand {
+    font-weight: 700;
+    font-size: 15px;
+    text-align: center;
+    margin-bottom: 8px;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+  }
+  .receipt__rule {
+    height: 1px;
+    background: #dbe4f0;
+    margin: 10px 0;
+  }
+  .receipt__table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .receipt__table td {
+    padding: 5px 2px;
+    vertical-align: top;
+    border-bottom: 1px solid #eef2f8;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+  }
+  .th-title { font-weight: 700; font-size: 14px; text-align: center; border-bottom: none !important; }
+  .th-muted { color: #5a6b85; font-size: 12px; width: 38%; }
+  .th-num { text-align: end; }
+  .th-wrap { font-weight: 600; }
+  .th-gap td { border: none !important; padding: 4px 0 !important; }
+  .th-section { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #5a6b85; background: #f4f7fc; }
+  .th-strong td { font-weight: 700; font-size: 14px; border-bottom: 2px solid #dbe4f0; }
+  .ltr { direction: ltr; unicode-bidi: isolate; }
+  .receipt__thanks {
+    margin: 12px 0 0;
+    text-align: center;
+    font-size: 12px;
+    color: #5a6b85;
+  }
+  @media print {
+    html, body { background: #fff; }
+    .page { padding: 0; display: block; }
+    .receipt { box-shadow: none; border-radius: 0; border: none; max-width: 80mm; margin: 0 auto; }
+  }
 </style></head><body>${body}</body></html>`;
 }
 

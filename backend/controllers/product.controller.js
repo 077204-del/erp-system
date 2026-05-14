@@ -180,7 +180,10 @@ exports.deleteProduct = async (req, res) => {
 
     }
 
-    const saleCount = await Sale.countDocuments({ productId: id });
+    const saleCount = await Sale.countDocuments({
+      productId: id,
+      voided: { $ne: true },
+    });
     if (saleCount > 0) {
       return res.status(400).json({
         message: "Cannot delete product linked to sales history",

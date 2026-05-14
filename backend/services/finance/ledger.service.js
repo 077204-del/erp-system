@@ -29,9 +29,15 @@ function getDateRange(from, to) {
   return { start: a, end: b };
 }
 
+function matchSalesNotVoided() {
+  return { voided: { $ne: true } };
+}
+
 function buildSalesFilter(range) {
-  if (!range) return {};
+  const base = matchSalesNotVoided();
+  if (!range) return base;
   return {
+    ...base,
     saleDate: {
       $gte: range.start,
       $lte: range.end,
@@ -173,7 +179,7 @@ async function getClientBalance(clientId, options = {}) {
     populatePaymentsSale = false,
   } = options;
 
-  let salesQuery = Sale.find({ clientId });
+  let salesQuery = Sale.find({ clientId, ...matchSalesNotVoided() });
   let paymentsQuery = Payment.find({ clientId });
 
   if (populateSalesProduct) {
@@ -235,7 +241,12 @@ async function getClientById(id) {
 async function getTotalOutstandingDebtFromLedger() {
   const [saleGroups, payGroups] = await Promise.all([
     Sale.aggregate([
-      { $match: { clientId: { $exists: true, $ne: null } } },
+      {
+        $match: {
+          clientId: { $exists: true, $ne: null },
+          voided: { $ne: true },
+        },
+      },
       {
         $group: {
           _id: "$clientId",
@@ -326,6 +337,28 @@ async function getProductById(id) {
   return Product.findById(id);
 }
 
+/**
+ * Σ (costPrice × qty) across all products — inventory capital at cost (admin KPI).
+ * Updates automatically whenever product qty or costPrice changes in the DB.
+ */
+async function getInventoryCapital() {
+  const rows = await Product.aggregate([
+    {
+      $project: {
+        line: {
+          $multiply: [
+            { $ifNull: ["$costPrice", 0] },
+            { $ifNull: ["$qty", 0] },
+          ],
+        },
+      },
+    },
+    { $group: { _id: null, total: { $sum: "$line" } } },
+  ]);
+  if (!rows || !rows.length) return 0;
+  return toNumber(rows[0].total);
+}
+
 module.exports = {
   getDashboardStats,
   getClosingStats,
@@ -342,4 +375,5 @@ module.exports = {
   getUserByUsername,
   getProductsSorted,
   getProductById,
+  getInventoryCapital,
 };

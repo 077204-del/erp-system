@@ -26,7 +26,9 @@ function createdAtFromUser(u) {
 }
 
 function normalizeRole(role) {
-  return role === "admin" ? "admin" : "cashier";
+  const r = String(role || "").trim().toLowerCase();
+  if (r === "admin" || r === "manager" || r === "cashier") return r;
+  return "cashier";
 }
 
 function normalizePermissionMap(p = {}) {
@@ -136,7 +138,8 @@ exports.updateUserPermissions = async (req, res) => {
 
     if (String(target.role || "").toLowerCase() === "admin") {
       return res.status(400).json({
-        message: "Admin role uses full access; permission map applies to cashiers only.",
+        message:
+          "Admin role uses full access; permission map applies to cashiers and managers only.",
       });
     }
 

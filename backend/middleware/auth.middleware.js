@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const { mergeUserFromToken } = require("../services/rbac.service");
 
 function normalizeRoles(roles) {
   if (Array.isArray(roles)) {
@@ -23,22 +24,12 @@ const KNOWN_PERMISSIONS = new Set([
   "canManageUsers",
 ]);
 
-const CASHIER_DEFAULT_ALLOWED = new Set([
-  "canCreateSales",
-  "canCreatePayments",
-]);
-
 function hasRequestedPermission(user, permissions) {
   if (!permissions.length) return true;
   if (user && String(user.role || "").toLowerCase() === "admin") return true;
-  // Default cashier mode (no granular map): keep only operational create flows.
-  if (user == null || user.permissions == null) {
-    return permissions.every((key) => CASHIER_DEFAULT_ALLOWED.has(key));
-  }
-  const perms = user.permissions;
-  if (typeof perms !== "object") {
-    return permissions.every((key) => CASHIER_DEFAULT_ALLOWED.has(key));
-  }
+  const perms = user && user.permissions && typeof user.permissions === "object"
+    ? user.permissions
+    : {};
   return permissions.every((key) => perms[key] === true);
 }
 
@@ -53,7 +44,7 @@ function authorize(allowedRoles) {
 
       const token = header.split(" ")[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = decoded;
+      req.user = mergeUserFromToken(decoded);
 
       const requiredPermissions = allowedRoles.filter((x) =>
         KNOWN_PERMISSIONS.has(x)
@@ -64,11 +55,11 @@ function authorize(allowedRoles) {
 
       if (
         requiredRoles.length &&
-        !requiredRoles.includes(decoded.role)
+        !requiredRoles.includes(req.user.role)
       ) {
         return res.status(403).json({ message: "Forbidden" });
       }
-      if (!hasRequestedPermission(decoded, requiredPermissions)) {
+      if (!hasRequestedPermission(req.user, requiredPermissions)) {
         return res.status(403).json({ message: "Forbidden" });
       }
 

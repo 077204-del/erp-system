@@ -1,8 +1,9 @@
 const PDFDocument = require("pdfkit");
 const {
   writeCreateSale,
+  writeUpdateSaleById,
   writeApplyPaymentToSale,
-  writeDeleteSaleById,
+  writeVoidSaleById,
 } = require("../services/finance.write.service");
 const { getSalesList, getSaleById } = require("../services/finance/ledger.service");
 const { appendAudit } = require("../services/auditLog.service");
@@ -10,6 +11,29 @@ const {
   renderProfessionalInvoicePdf,
   renderThermalInvoiceHtml,
 } = require("../services/invoiceRender.service");
+
+function cashierSaleEditWindowMs() {
+  const n = parseInt(process.env.CASHIER_SALE_EDIT_WINDOW_MINUTES || "30", 10);
+  return (Number.isFinite(n) && n > 0 ? n : 30) * 60 * 1000;
+}
+
+function assertCashierMayEditSale(req, saleDoc) {
+  const role = String(req.user && req.user.role ? req.user.role : "").toLowerCase();
+  if (role !== "cashier") return null;
+  const ref = new Date(saleDoc.createdAt || saleDoc.saleDate || Date.now());
+  if (Number.isNaN(ref.getTime())) return null;
+  if (Date.now() - ref.getTime() > cashierSaleEditWindowMs()) {
+    return {
+      status: 403,
+      body: {
+        message:
+          "Cashiers may only edit sales within the allowed time window. Ask a manager or admin.",
+        code: "SALE_EDIT_WINDOW",
+      },
+    };
+  }
+  return null;
+}
 
 // ======================
 // CREATE SALE
@@ -85,6 +109,77 @@ exports.getSales = async (req, res, next) => {
 };
 
 // ======================
+// UPDATE SALE LINE (PATCH — same sale _id; stock + totals reconciled)
+// ======================
+exports.updateSale = async (req, res) => {
+  try {
+    const existing = await getSaleById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ message: "Sale not found" });
+    }
+    const blocked = assertCashierMayEditSale(req, existing);
+    if (blocked) {
+      return res.status(blocked.status).json(blocked.body);
+    }
+
+    const {
+      productId,
+      clientId,
+      quantity,
+      paidAmount = 0,
+      paymentMethod = "CASH",
+      negotiatedUnitPrice,
+      agreedUnitPrice,
+      paymentType,
+    } = req.body;
+
+    const negotiated =
+      negotiatedUnitPrice != null ? negotiatedUnitPrice : agreedUnitPrice;
+
+    const result = await writeUpdateSaleById(
+      req.params.id,
+      {
+        productId,
+        clientId,
+        quantity,
+        paidAmount,
+        paymentMethod,
+        paymentType,
+        negotiatedUnitPrice: negotiated,
+      },
+      req.user.id
+    );
+
+    if (!result.ok) {
+      return res.status(result.status).json(result.body);
+    }
+
+    const { sale } = result;
+
+    appendAudit(
+      {
+        userId: req.user.id,
+        action: "SALE_UPDATED",
+        entityType: "Sale",
+        entityId: sale._id,
+      },
+      req
+    );
+
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("sale-updated", sale);
+    }
+
+    return res.json(sale);
+  } catch (err) {
+    return res.status(500).json({
+      error: err.message,
+    });
+  }
+};
+
+// ======================
 // PAY SALE
 // ======================
 exports.paySale = async (req, res, next) => {
@@ -129,24 +224,36 @@ exports.paySale = async (req, res, next) => {
 };
 
 // ======================
-// DELETE SALE (admin — reverses stock; removes linked payments)
+// VOID SALE (DELETE route kept for API compatibility — no hard delete)
 // ======================
-exports.deleteSale = async (req, res) => {
+exports.voidSale = async (req, res) => {
   try {
-    const result = await writeDeleteSaleById(req.params.id, req.user.id);
+    const reasonRaw =
+      (req.body && req.body.reason) != null
+        ? req.body.reason
+        : req.query && req.query.reason != null
+          ? req.query.reason
+          : "";
+    const reason = String(reasonRaw).trim();
+    if (!reason) {
+      return res.status(400).json({ message: "Void reason is required" });
+    }
+
+    const result = await writeVoidSaleById(req.params.id, req.user.id, reason);
     if (!result.ok) {
       return res.status(result.status).json(result.body);
     }
     appendAudit(
       {
         userId: req.user.id,
-        action: "SALE_DELETED",
+        action: "SALE_VOIDED",
         entityType: "Sale",
         entityId: req.params.id,
+        meta: { reason },
       },
       req
     );
-    return res.json({ message: "Sale deleted" });
+    return res.json({ message: "Sale voided", voided: true });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -162,6 +269,12 @@ exports.generateInvoice = async (req, res) => {
     if (!sale) {
       return res.status(404).json({
         message: "Invoice not found",
+      });
+    }
+
+    if (sale.voided === true || String(sale.status || "") === "VOID") {
+      return res.status(410).json({
+        message: "This sale has been voided; invoice is unavailable.",
       });
     }
 

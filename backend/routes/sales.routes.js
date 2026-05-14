@@ -4,10 +4,31 @@ const auth = require("../middleware/auth.middleware");
 
 const controller = require("../controllers/sales.controller");
 
-router.post("/", auth(["admin", "cashier", "canCreateSales"]), controller.createSale);
-router.get("/", auth(["admin", "cashier"]), controller.getSales);
-router.delete("/:id", auth(["admin", "cashier", "canDeleteSales"]), controller.deleteSale);
-router.get("/:id/invoice", auth(["admin", "cashier"]), controller.generateInvoice);
-router.put("/:id", auth(["admin", "cashier", "canEditSales"]), controller.paySale);
+router.post(
+  "/",
+  auth(["admin", "manager", "cashier", "canCreateSales"]),
+  controller.createSale
+);
+router.get("/", auth(["admin", "manager", "cashier"]), controller.getSales);
+router.patch(
+  "/:id",
+  auth(["admin", "manager", "cashier", "canEditSales"]),
+  controller.updateSale
+);
+router.delete(
+  "/:id",
+  auth(["admin", "manager"]),
+  controller.voidSale
+);
+router.get(
+  "/:id/invoice",
+  auth(["admin", "manager", "cashier"]),
+  controller.generateInvoice
+);
+router.put(
+  "/:id",
+  auth(["admin", "manager", "cashier", "canCreatePayments"]),
+  controller.paySale
+);
 
 module.exports = router;
