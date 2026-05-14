@@ -2,11 +2,6 @@
   "appId": "com.erp.store",
   "appName": "ERP Store",
   "webDir": "build",
-  "server": {
-    "url": "https://erp-system-3-jyk9.onrender.com",
-    "cleartext": false,
-    "errorPath": "index.html"
-  },
   "android": {
     "backgroundColor": "#ffffff",
     "allowMixedContent": true
