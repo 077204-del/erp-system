@@ -57,6 +57,7 @@ function MainWorkspace({ setToken, reportLoading }) {
     debt: 0,
     totalExpenses: 0,
     netCashFlow: 0,
+    inventoryCapital: null,
   });
 
   const [cash, setCash] = useState({
@@ -132,6 +133,7 @@ function MainWorkspace({ setToken, reportLoading }) {
         debt: 0,
         totalExpenses: 0,
         netCashFlow: 0,
+        inventoryCapital: null,
       });
       setCash({
         cashSales: 0,
@@ -323,6 +325,7 @@ function MainWorkspace({ setToken, reportLoading }) {
           onApply={handleApply}
           onReset={handleReset}
           canViewFinancial={isAdmin || canViewReports}
+          isAdmin={isAdmin}
         />
       ) : null}
 

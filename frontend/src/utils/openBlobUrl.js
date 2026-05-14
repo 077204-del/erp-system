@@ -26,6 +26,9 @@ export function downloadBlob(blob, filename = "download.bin") {
     a.href = href;
     a.download = filename;
     a.rel = "noopener";
+    if (blob && blob.type) {
+      a.type = blob.type;
+    }
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -80,6 +83,9 @@ export function openBlobInNewContext(blob, revokeMs = 300_000) {
       a.href = href;
       a.target = "_blank";
       a.rel = "noopener noreferrer";
+      if (blob && blob.type) {
+        a.type = blob.type;
+      }
       document.body.appendChild(a);
       a.click();
       a.remove();

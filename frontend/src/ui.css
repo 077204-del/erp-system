@@ -2314,7 +2314,68 @@
 
 .erp-invoice-actions-no-print {
   margin-top: var(--erp-space-5);
+  display: flex;
   flex-wrap: wrap;
+  gap: var(--erp-space-2);
+  justify-content: center;
+  align-items: center;
+}
+
+.erp-pdf-preview-backdrop {
+  z-index: 12000;
+  padding: max(0.75rem, env(safe-area-inset-top, 0px))
+    max(0.75rem, env(safe-area-inset-right, 0px))
+    max(0.75rem, env(safe-area-inset-bottom, 0px))
+    max(0.75rem, env(safe-area-inset-left, 0px));
+}
+
+.erp-pdf-preview-shell {
+  display: flex;
+  flex-direction: column;
+  width: min(calc(100vw - 1.5rem), 960px);
+  max-width: 100%;
+  max-height: min(92dvh, calc(var(--erp-vvh, 100dvh) - 2rem));
+  margin: auto;
+  background: var(--erp-surface);
+  border-radius: var(--erp-radius-md, 10px);
+  overflow: hidden;
+  box-shadow: 0 16px 50px rgba(15, 34, 66, 0.2);
+  border: 1px solid var(--erp-border);
+}
+
+.erp-pdf-preview-head {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--erp-space-3);
+  padding: var(--erp-space-3) var(--erp-space-4);
+  border-bottom: 1px solid var(--erp-border);
+  background: var(--erp-surface-muted, rgba(15, 23, 42, 0.04));
+}
+
+.erp-pdf-preview-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.erp-pdf-preview-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  background: #1e2430;
+}
+
+.erp-pdf-preview-embed {
+  display: block;
+  width: 100%;
+  height: min(78dvh, calc(var(--erp-vvh, 100dvh) - 8rem));
+  min-height: 240px;
+  max-width: 100%;
+  border: 0;
 }
 
 @media print {

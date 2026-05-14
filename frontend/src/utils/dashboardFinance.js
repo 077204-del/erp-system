@@ -42,6 +42,12 @@ export function mapDashboardApiToState(data) {
     ? Number(stats.netProfit)
     : 0;
 
+  const invCap =
+    data?.access?.inventoryCapital === true &&
+    Number.isFinite(Number(stats.inventoryCapital))
+      ? Number(stats.inventoryCapital)
+      : null;
+
   return {
     dashboard: {
       sales: salesCount,
@@ -55,6 +61,7 @@ export function mapDashboardApiToState(data) {
         ? Number(stats.totalExpenses)
         : 0,
       netCashFlow,
+      inventoryCapital: invCap,
     },
     cash: {
       cashSales: Number.isFinite(Number(cash.cashSales))

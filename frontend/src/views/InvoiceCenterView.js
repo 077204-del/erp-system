@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import api from "../api";
 import ErpDataTable from "../components/ErpDataTable";
@@ -12,7 +12,9 @@ import { toInvoiceBlob } from "../utils/invoiceBlob";
 async function invoiceErrorMessage(err, fallback) {
   if (!err || !err.response) return fallback;
   const d = err.response.data;
-  if (d && typeof d === "object" && d.message) return String(d.message);
+  if (d && typeof d === "object" && !(d instanceof Blob) && d.message) {
+    return String(d.message);
+  }
   if (d instanceof Blob) {
     try {
       const t = await d.text();
@@ -34,6 +36,19 @@ export default function InvoiceCenterView({
   const { t } = useLocale();
   const [previewSale, setPreviewSale] = useState(null);
   const [busyKey, setBusyKey] = useState("");
+  const [pdfViewerUrl, setPdfViewerUrl] = useState(null);
+
+  useEffect(() => {
+    return () => {
+      if (pdfViewerUrl) {
+        try {
+          URL.revokeObjectURL(pdfViewerUrl);
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+  }, [pdfViewerUrl]);
 
   const saleIdStr = (r) =>
     r && r._id != null ? String(r._id) : "";
@@ -42,6 +57,18 @@ export default function InvoiceCenterView({
     const { disposition = "inline" } = options;
     const key = `${saleId}:${mode}`;
     setBusyKey(key);
+
+    setPdfViewerUrl((prev) => {
+      if (prev) {
+        try {
+          URL.revokeObjectURL(prev);
+        } catch {
+          /* ignore */
+        }
+      }
+      return null;
+    });
+
     try {
       const thermal = mode === "thermal";
       const pdf = mode === "pdf";
@@ -50,11 +77,19 @@ export default function InvoiceCenterView({
         : `/api/sales/${saleId}/invoice`;
 
       const res = await api.get(url, { responseType: "blob" });
+      if (res.status < 200 || res.status >= 300) {
+        throw new Error(`http_${res.status}`);
+      }
+
       const ct = (res.headers["content-type"] || "").toLowerCase();
       if (ct.includes("application/json")) {
         const text = await res.data.text();
         const j = JSON.parse(text);
         throw new Error(j.message || "Unexpected response");
+      }
+
+      if (!(res.data instanceof Blob) || res.data.size === 0) {
+        throw new Error("empty");
       }
 
       const out = await toInvoiceBlob(res.data, res.headers["content-type"], {
@@ -71,9 +106,9 @@ export default function InvoiceCenterView({
         if (opened) {
           toast.success(t("invoice.pdfPreviewOk"));
         } else {
-          const ok = downloadBlob(out, `invoice_${saleId}.pdf`);
-          if (!ok) throw new Error("preview");
-          toast.success(t("invoice.pdfFallbackDownload"));
+          const u = URL.createObjectURL(out);
+          setPdfViewerUrl(u);
+          toast.success(t("invoice.pdfEmbedOpen"));
         }
       } else if (thermal) {
         const opened = openBlobInNewContext(out, 180_000);
@@ -96,10 +131,14 @@ export default function InvoiceCenterView({
         }
       }
     } catch (err) {
-      const msg =
-        err && String(err.message) === "empty"
-          ? t("invoice.emptyBlob")
-          : await invoiceErrorMessage(err, t("invoice.err"));
+      let msg;
+      if (err && String(err.message) === "empty") {
+        msg = t("invoice.emptyBlob");
+      } else if (err && String(err.message) === "invalid_pdf") {
+        msg = t("invoice.pdfInvalid");
+      } else {
+        msg = await invoiceErrorMessage(err, t("invoice.err"));
+      }
       toast.error(msg, t("invoice.title"));
     } finally {
       setBusyKey("");
@@ -207,7 +246,7 @@ export default function InvoiceCenterView({
               {spinning("thermal") ? (
                 <>
                   <span className="erp-spinner erp-spinner--sm" aria-hidden />
-                  …
+                  {t("invoice.spinningThermal")}
                 </>
               ) : (
                 t("invoice.thermal")
@@ -264,8 +303,65 @@ export default function InvoiceCenterView({
         />
       ) : null}
 
+      {pdfViewerUrl
+        ? createPortal(
+            <InvoicePdfPreviewOverlay
+              url={pdfViewerUrl}
+              onClose={() => {
+                try {
+                  URL.revokeObjectURL(pdfViewerUrl);
+                } catch {
+                  /* ignore */
+                }
+                setPdfViewerUrl(null);
+              }}
+              title={t("invoice.previewPdf")}
+              closeLabel={t("invoice.close")}
+            />,
+            document.body
+          )
+        : null}
+
       <ErpModuleFooter />
     </section>
+  );
+}
+
+function InvoicePdfPreviewOverlay({ url, onClose, title, closeLabel }) {
+  useBodyScrollLock(true);
+  return (
+    <div
+      className="erp-modal-backdrop erp-pdf-preview-backdrop"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        className="erp-pdf-preview-shell"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="erp-pdf-preview-head">
+          <strong className="erp-pdf-preview-title">{title}</strong>
+          <button
+            type="button"
+            className="erp-btn erp-btn-primary erp-btn-sm"
+            onClick={onClose}
+          >
+            {closeLabel}
+          </button>
+        </div>
+        <div className="erp-pdf-preview-frame">
+          <embed
+            src={url}
+            type="application/pdf"
+            title={title}
+            className="erp-pdf-preview-embed"
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -429,7 +525,7 @@ function InvoicePreviewModal({
             {spin("thermal") ? (
               <>
                 <span className="erp-spinner erp-spinner--sm" aria-hidden />
-                …
+                {t("invoice.spinningThermal")}
               </>
             ) : (
               t("invoice.thermalPrint")

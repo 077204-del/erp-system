@@ -51,6 +51,7 @@ export function DashboardView({
   onApply,
   onReset,
   canViewFinancial = false,
+  isAdmin = false,
 }) {
   const { t } = useLocale();
   const showKpiSkeleton = loading && !initialSyncDone;
@@ -59,6 +60,7 @@ export function DashboardView({
     dashboard?.salesCount ?? dashboard?.sales,
     0
   );
+  const kpiSkeletonCount = isAdmin ? 7 : 6;
 
   const lowStockItems = Array.isArray(products)
     ? products.filter((p) => p.lowStock === true)
@@ -125,12 +127,9 @@ export function DashboardView({
         <div className="erp-kpi-grid">
           {showKpiSkeleton ? (
             <>
-              <StatCardSkeleton />
-              <StatCardSkeleton />
-              <StatCardSkeleton />
-              <StatCardSkeleton />
-              <StatCardSkeleton />
-              <StatCardSkeleton />
+              {Array.from({ length: kpiSkeletonCount }).map((_, i) => (
+                <StatCardSkeleton key={`dash-sk-${i}`} />
+              ))}
             </>
           ) : (
             <>
@@ -146,6 +145,16 @@ export function DashboardView({
                 hint={t("dashboard.revenueHint")}
                 tone="mint"
               />
+              {isAdmin &&
+              dashboard != null &&
+              Number.isFinite(dashboard.inventoryCapital) ? (
+                <KpiCard
+                  label={t("dashboard.inventoryCapital")}
+                  value={formatMoneyDZD(dashboard.inventoryCapital)}
+                  hint={t("dashboard.inventoryCapitalHint")}
+                  tone="slate"
+                />
+              ) : null}
               {canViewFinancial ? (
                 <>
                   <KpiCard
