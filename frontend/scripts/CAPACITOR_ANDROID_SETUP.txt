@@ -1,4 +1,4 @@
-Capacitor Android — stable production (bundled UI + Render API)
+Capacitor Android — remote UI (OTA) + bundled fallback + Render API
 
 
 
@@ -6,49 +6,67 @@ ARCHITECTURE
 
 ------------
 
-- WebView loads the React app from **webDir** (`build/`) after `npm run build` + `cap sync`.
+- **Primary UI (OTA):** `capacitor.config.json` → `server.url` points at the HTTPS static site on Render
+  (`https://erp-system-3-jyk9.onrender.com`). After `npm run build` + `npx cap sync android`, the WebView
+  loads that URL first. Updating the deployment on Render updates the UI **without** a new APK, as long as
+  you do **not** change native config, plugins, or `capacitor.config.json`.
 
-- No `server.url` — no remote UI shell; one APK per UI release you ship.
+- **Fallback UI (offline / server error):** `server.errorPath` is set to `index.html`. Capacitor’s
+  `BridgeWebViewClient` loads that path on the **local** virtual host when the **main frame** hits a
+  network error or HTTP error (see Capacitor Android `BridgeWebViewClient` + `Bridge.getErrorUrl()`).
+  That file is the last copy synced from `webDir` (`build/`) into `android/.../assets/public/`.
 
-- API calls use **axios** + **src/config/apiBase.js** (`REACT_APP_API_URL` in `.env.production`, or `DEFAULT_API_ORIGIN`).
+- **`webDir`:** Still `build`. It does not override `server.url` for the initial load; it supplies the
+  bundled assets used for fallback and for `cap sync` / native layer.
+
+- **`server.cleartext`:** Set to `false` in config (HTTPS only). The Android Capacitor runtime may not
+  read this key directly; cleartext is off by default for `https://` remotes.
+
+- **API calls:** Still **axios** + `src/config/apiBase.js` (`REACT_APP_API_URL` at CRA build time, or
+  default origin). Not changed by this document.
 
 
 
-RELEASE STEPS
+RENDER REQUIREMENTS (REMOTE UI)
 
---------------
+-------------------------------
 
-1) Set API for production build (optional if default is correct):
+- The URL in `server.url` must serve your CRA `index.html` at the site root (or set `server.appStartPath`
+  if you host under a subpath — not configured here).
 
-   Copy `.env.production.example` → `.env.production` and set `REACT_APP_API_URL=https://<your-render-api>`
+- Use HTTPS on Render so the WebView does not need cleartext traffic.
 
 
 
-2) Build web bundle:
+RELEASE / SYNC WORKFLOW
+
+-----------------------
+
+1) Optional: set `REACT_APP_API_URL` for the **bundled** fallback build (copy `.env.production.example` →
+   `.env.production`).
+
+2) Build web bundle (feeds `webDir` + Android `assets/public` for fallback):
 
    npm ci
 
    npm run build
 
-
-
-3) Copy into Android project:
+3) Apply Capacitor config + copy web assets into Android:
 
    npx cap sync android
 
+   (or `npm run android:sync` which runs build + sync)
 
-
-4) Open Android Studio and build a signed release APK:
-
-   npx cap open android
+4) Build a signed release APK in Android Studio (`npm run cap:open:android` after sync).
 
 
 
-Convenience:
+MAINACTIVITY
 
-   npm run android:sync   # build + sync
+------------
 
-   npm run android:open # build + sync + open Studio
+- Keep `MainActivity` extending `BridgeActivity` with `SplashScreen.installSplashScreen` only; no
+  custom WebView URL logic required — Capacitor reads `capacitor.config.json` from assets.
 
 
 
@@ -66,8 +84,13 @@ TROUBLESHOOTING
 
 ---------------
 
-- Blank WebView: run `npm run build` then `cap sync` so `android/app/src/main/assets/public` is populated.
+- Remote blank / errors: confirm Render serves the app at `server.url` and returns 200 for the document.
 
-- API errors: verify `REACT_APP_API_URL` was set **before** `npm run build` (CRA bakes env at build time).
+- Fallback always appears: device offline, Render asleep, TLS issues, or main-document HTTP errors —
+  check Render logs and URL.
 
+- `android/app/src/main/assets/public` empty: run `npm run build` then `npx cap sync android`.
+
+- API errors in **bundled** fallback: `REACT_APP_API_URL` must be set **before** `npm run build` (CRA
+  bakes env at build time).
 

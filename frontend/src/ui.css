@@ -286,6 +286,20 @@
   transition: opacity var(--erp-transition);
 }
 
+.erp-sidebar__brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.erp-sidebar__tagline {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: rgba(244, 248, 255, 0.85);
+  line-height: 1.25;
+}
+
 .erp-sidebar__collapse {
   display: none;
   align-self: flex-end;

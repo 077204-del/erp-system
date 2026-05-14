@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">ERP Store</string>
-    <string name="title_activity_main">ERP Store</string>
+    <string name="app_name">Eco Meuble</string>
+    <string name="title_activity_main">Eco Meuble</string>
     <string name="package_name">com.erp.store</string>
     <string name="custom_url_scheme">com.erp.store</string>
 </resources>

@@ -200,11 +200,18 @@ export default function LayoutShell({
           <div className="erp-sidebar__brand">
             {!collapsed ? (
               <>
-                <span className="erp-sidebar__logo">ERP</span>
-                <span className="erp-sidebar__product">ERP Store</span>
+                <span className="erp-sidebar__logo" aria-hidden>
+                  EM
+                </span>
+                <div className="erp-sidebar__brand-text">
+                  <span className="erp-sidebar__product">{t("brand.title")}</span>
+                  <span className="erp-sidebar__tagline">{t("brand.tagline")}</span>
+                </div>
               </>
             ) : (
-              <span className="erp-sidebar__logo">E</span>
+              <span className="erp-sidebar__logo" aria-label={t("brand.title")}>
+                E
+              </span>
             )}
           </div>
           <button
