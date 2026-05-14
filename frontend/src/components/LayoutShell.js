@@ -27,6 +27,7 @@ const CASHIER_NAV_IDS = new Set([
   "clients",
   "payments",
   "invoices",
+  "register",
 ]);
 
 function NavIcon({ name }) {
@@ -142,12 +143,21 @@ export default function LayoutShell({
   onLogout,
 }) {
   const { t } = useLocale();
-  const isAdmin = String(userRole || "").toLowerCase() === "admin";
+  const role = String(userRole || "").toLowerCase();
+  const isAdmin = role === "admin";
+  const isManager = role === "manager";
   const canViewReports = navFlags.canViewReports === true;
   const canManageExpenses = navFlags.canManageExpenses === true;
   const navItems = useMemo(() => {
     const filtered = NAV.filter((item) => {
       if (isAdmin) return true;
+      if (isManager) {
+        return (
+          item.id !== "users" &&
+          item.id !== "audit" &&
+          item.id !== "settings"
+        );
+      }
       if (item.id === "audit") return false;
       if (item.id === "reports" && canViewReports) return true;
       if (item.id === "expenses" && canManageExpenses) return true;
@@ -157,7 +167,7 @@ export default function LayoutShell({
       ...item,
       label: t(`nav.${item.id}`),
     }));
-  }, [t, isAdmin, canViewReports, canManageExpenses]);
+  }, [t, isAdmin, isManager, canViewReports, canManageExpenses]);
 
   const [collapsed, setCollapsed] = useState(() => {
     try {

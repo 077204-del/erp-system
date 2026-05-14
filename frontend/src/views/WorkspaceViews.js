@@ -269,7 +269,7 @@ export function SalesView({
   onRefreshWorkspace,
   canCreateSales = true,
   canEditSales = false,
-  canDeleteSales = false,
+  canVoidSales = false,
 }) {
   const { t } = useLocale();
   const { toast, confirm } = useErpUi();
@@ -294,7 +294,7 @@ export function SalesView({
     { key: "status", header: "Status", render: (r) => safeText(r.status, "—") },
     { key: "debt", header: "Debt", numeric: true, currency: true },
     { key: "total", header: "Total", numeric: true, currency: true },
-    ...(canEditSales || canDeleteSales
+    ...(canEditSales || canVoidSales
       ? [
           {
             key: "actions",
@@ -314,27 +314,35 @@ export function SalesView({
                     {t("saleFlow.edit")}
                   </button>
                 ) : null}
-                {canDeleteSales ? (
+                {canVoidSales ? (
                   <button
                     type="button"
                     className="erp-btn erp-btn-danger erp-btn-sm"
                     onClick={() => {
                       confirm({
-                        title: t("saleFlow.deleteTitle"),
-                        message: safeText(
-                          r.productId && r.productId.name != null
-                            ? r.productId.name
-                            : r._id,
-                          "—"
-                        ),
+                        title: t("saleFlow.voidTitle"),
+                        message: t("saleFlow.voidLead"),
                         danger: true,
-                        confirmLabel: t("saleFlow.deleteConfirm"),
+                        confirmLabel: t("saleFlow.voidConfirm"),
                         onConfirm: async () => {
+                          const reason = window.prompt(
+                            t("saleFlow.voidReasonPrompt")
+                          );
+                          if (reason == null) return;
+                          const trimmed = String(reason).trim();
+                          if (!trimmed) {
+                            toast.warning(
+                              t("saleFlow.voidReasonRequired"),
+                              t("saleFlow.voidTitle")
+                            );
+                            return;
+                          }
                           try {
                             await api.delete(
-                            `/api/sales/${encodeURIComponent(String(r._id))}`
-                          );
-                            toast.success(t("saleFlow.deleted"));
+                              `/api/sales/${encodeURIComponent(String(r._id))}`,
+                              { params: { reason: trimmed } }
+                            );
+                            toast.success(t("saleFlow.voided"));
                             if (typeof onRefreshWorkspace === "function") {
                               onRefreshWorkspace();
                             }
@@ -342,15 +350,15 @@ export function SalesView({
                             const st = err.response && err.response.status;
                             const msg =
                               st === 403
-                                ? t("saleFlow.deleteForbidden")
+                                ? t("saleFlow.voidForbidden")
                                 : apiErrorMessage(err);
-                            toast.error(msg, t("saleFlow.deleteTitle"));
+                            toast.error(msg, t("saleFlow.voidTitle"));
                           }
                         },
                       });
                     }}
                   >
-                    {t("saleFlow.delete")}
+                    {t("saleFlow.void")}
                   </button>
                 ) : null}
               </div>
@@ -391,7 +399,7 @@ export function SalesView({
           {t("rbac.noCreateSales")}
         </p>
       )}
-      {!canEditSales && !canDeleteSales ? (
+      {!canEditSales && !canVoidSales ? (
         <p className="erp-card-hint erp-sales-perm-hint" role="note">
           {t("saleFlow.readOnlyOpsHint")}
         </p>

@@ -151,9 +151,12 @@ export default function UsersModuleView() {
     load();
   }, [load]);
 
-  const cashierRows = useMemo(
+  const staffPermRows = useMemo(
     () =>
-      rows.filter((r) => String(r.role || "").toLowerCase() === "cashier"),
+      rows.filter((r) => {
+        const rl = String(r.role || "").toLowerCase();
+        return rl === "cashier" || rl === "manager";
+      }),
     [rows]
   );
 
@@ -252,7 +255,9 @@ export default function UsersModuleView() {
         const cls =
           role === "admin"
             ? "erp-badge erp-badge--warning"
-            : "erp-badge erp-badge--neutral";
+            : role === "manager"
+              ? "erp-badge erp-badge--success"
+              : "erp-badge erp-badge--neutral";
         return <span className={cls}>{safeText(r.role, "—")}</span>;
       },
     },
@@ -319,6 +324,7 @@ export default function UsersModuleView() {
               onChange={(e) => setNewRole(e.target.value)}
             >
               <option value="cashier">{t("users.cashier")}</option>
+              <option value="manager">{t("users.manager")}</option>
               <option value="admin">{t("users.admin")}</option>
             </select>
           </div>
@@ -349,9 +355,9 @@ export default function UsersModuleView() {
         searchPlaceholder={t("users.searchPh")}
       />
 
-      {cashierRows.length ? (
+      {staffPermRows.length ? (
         <div style={{ marginTop: "1.25rem" }}>
-          {cashierRows.map((r) => (
+          {staffPermRows.map((r) => (
             <CashierPermissionCard
               key={r.id}
               row={r}

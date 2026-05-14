@@ -103,6 +103,15 @@ export const messages = {
       deleteConfirm: "حذف",
       deleted: "تم حذف البيع.",
       deleteForbidden: "غير مسموح بحذف المبيعات.",
+      void: "إبطال",
+      voidTitle: "إبطال عملية البيع؟",
+      voidLead:
+        "يُحتفظ بالسجل مع من أبطل ووقت الإبطال والسبب. لن يُحذف الصف نهائياً.",
+      voidConfirm: "إبطال",
+      voided: "تم إبطال البيع.",
+      voidForbidden: "غير مسموح بإبطال المبيعات.",
+      voidReasonPrompt: "سبب الإبطال (إلزامي):",
+      voidReasonRequired: "يجب إدخال سبب للإبطال.",
       readOnlyOpsHint:
         "تعديل أو حذف المبيعات يتطلب صلاحيات من المسؤول (تعديل/حذف المبيعات).",
     },
@@ -178,6 +187,7 @@ export const messages = {
       role: "الدور",
       cashier: "كاشير",
       admin: "مسؤول",
+      manager: "مشرف",
       create: "إنشاء مستخدم",
       saving: "جاري الحفظ…",
       delete: "حذف",
@@ -350,6 +360,8 @@ export const messages = {
       title: "التقارير والإحصاءات",
       lead:
         "تحليلات الفترة. القوائم من الخادم عند التوفر؛ الرسوم البيانية من البيانات المحلية.",
+      cashierDailyOnly:
+        "حساب الكاشير يقتصر على بيانات اليوم في هذه الشاشة (يُتجاهل نطاق التاريخ في لوحة التحكم).",
       unavailable: "تقرير الخادم غير متاح — عرض تجميعات محلية.",
       expDaily: "مصروفات يومية",
       expMonthly: "مصروفات شهرية",
@@ -599,6 +611,15 @@ export const messages = {
       deleteConfirm: "Supprimer",
       deleted: "Vente supprimée.",
       deleteForbidden: "Suppression des ventes interdite.",
+      void: "Annuler",
+      voidTitle: "Annuler la vente ?",
+      voidLead:
+        "La ligne reste en historique avec auteur, horodatage et motif (annulation comptable).",
+      voidConfirm: "Annuler",
+      voided: "Vente annulée.",
+      voidForbidden: "Annulation de vente interdite.",
+      voidReasonPrompt: "Motif d’annulation (obligatoire) :",
+      voidReasonRequired: "Un motif est obligatoire.",
       readOnlyOpsHint:
         "Modifier ou supprimer une vente nécessite les droits « ventes » accordés par un administrateur.",
     },
@@ -675,6 +696,7 @@ export const messages = {
       role: "Rôle",
       cashier: "caissier",
       admin: "admin",
+      manager: "gestionnaire",
       create: "Créer",
       saving: "Enregistrement…",
       delete: "Supprimer",
@@ -849,6 +871,8 @@ export const messages = {
       title: "Rapports",
       lead:
         "Analyses sur la période. Listes serveur si dispo.; graphiques locaux sinon.",
+      cashierDailyOnly:
+        "Les comptes caissier sont limités aux données du jour sur cet écran (la plage du tableau de bord est ignorée).",
       unavailable: "Rapport serveur indisponible — cumuls locaux.",
       expDaily: "Dépenses quotidiennes",
       expMonthly: "Dépenses mensuelles",
@@ -1098,6 +1122,15 @@ export const messages = {
       deleteConfirm: "Delete",
       deleted: "Sale deleted.",
       deleteForbidden: "You cannot delete sales.",
+      void: "Void sale",
+      voidTitle: "Void this sale?",
+      voidLead:
+        "The line stays in history with who voided it, when, and why. Stock and payments are reversed.",
+      voidConfirm: "Void",
+      voided: "Sale voided.",
+      voidForbidden: "You cannot void sales.",
+      voidReasonPrompt: "Void reason (required):",
+      voidReasonRequired: "A reason is required to void a sale.",
       readOnlyOpsHint:
         "Editing or deleting a sale requires administrator-granted sales permissions.",
     },
@@ -1174,6 +1207,7 @@ export const messages = {
       role: "Role",
       cashier: "cashier",
       admin: "admin",
+      manager: "manager",
       create: "Create user",
       saving: "Saving…",
       delete: "Delete",
@@ -1350,6 +1384,8 @@ export const messages = {
       title: "Reports",
       lead:
         "Period analytics. Server lists when available; charts from loaded rows.",
+      cashierDailyOnly:
+        "Cashier accounts are limited to today’s data on this screen (workspace range is ignored).",
       unavailable: "Server report unavailable — showing local rollups.",
       expDaily: "Expenses (daily)",
       expMonthly: "Expenses (monthly)",

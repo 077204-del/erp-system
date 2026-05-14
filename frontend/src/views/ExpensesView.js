@@ -12,6 +12,7 @@ function readExpenseWriteAccess() {
     const u = raw ? JSON.parse(raw) : null;
     if (!u) return false;
     if (String(u.role || "").toLowerCase() === "admin") return true;
+    if (String(u.role || "").toLowerCase() === "manager") return true;
     const p = u.permissions;
     if (p == null) return false;
     return p.canManageExpenses === true;

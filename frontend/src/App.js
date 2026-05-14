@@ -43,6 +43,19 @@ function readStoredUser() {
   }
 }
 
+function initialRangeForRole() {
+  try {
+    const u = readStoredUser();
+    if (String(u?.role || "").toLowerCase() === "cashier") {
+      const t = new Date().toISOString().slice(0, 10);
+      return { from: t, to: t };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { from: "2020-01-01", to: "2030-01-01" };
+}
+
 function MainWorkspace({ setToken, reportLoading }) {
   const { toast, confirm } = useErpUi();
   const { t } = useLocale();
@@ -74,29 +87,39 @@ function MainWorkspace({ setToken, reportLoading }) {
   const [loading, setLoading] = useState(false);
   const [initialSyncDone, setInitialSyncDone] = useState(false);
 
-  const [from, setFrom] = useState("2020-01-01");
-  const [to, setTo] = useState("2030-01-01");
+  const rangeInit = initialRangeForRole();
+  const [from, setFrom] = useState(rangeInit.from);
+  const [to, setTo] = useState(rangeInit.to);
 
   const initialFetchRef = useRef(false);
   const storedUser = readStoredUser();
-  const isAdmin =
-    String(storedUser?.role || "").toLowerCase() === "admin";
+  const roleLower = String(storedUser?.role || "").toLowerCase();
+  const isAdmin = roleLower === "admin";
+  const isManager = roleLower === "manager";
+  const isCashier = roleLower === "cashier";
   const permObj = storedUser?.permissions;
   const perms = permObj && typeof permObj === "object" ? permObj : {};
   const canViewReports =
-    isAdmin || perms.canViewReports === true;
+    isAdmin || isManager || perms.canViewReports === true || isCashier;
   const canManageExpenses =
-    isAdmin || perms.canManageExpenses === true;
+    isAdmin || isManager || perms.canManageExpenses === true;
   const canManageProducts =
-    isAdmin || perms.canManageProducts === true;
+    isAdmin || isManager || perms.canManageProducts === true;
   const canManageClients =
-    isAdmin || perms.canManageClients === true;
+    isAdmin || isManager || isCashier || perms.canManageClients === true;
   const canCreateSales =
-    isAdmin || String(storedUser?.role || "").toLowerCase() === "cashier" || perms.canCreateSales === true;
+    isAdmin ||
+    isManager ||
+    isCashier ||
+    perms.canCreateSales === true;
   const canCreatePayments =
-    isAdmin || String(storedUser?.role || "").toLowerCase() === "cashier" || perms.canCreatePayments === true;
-  const canEditSales = isAdmin || perms.canEditSales === true;
-  const canDeleteSales = isAdmin || perms.canDeleteSales === true;
+    isAdmin ||
+    isManager ||
+    isCashier ||
+    perms.canCreatePayments === true;
+  const canEditSales =
+    isAdmin || isManager || isCashier || perms.canEditSales === true;
+  const canVoidSales = isAdmin || isManager;
 
   useEffect(() => {
     reportLoading(loading);
@@ -230,20 +253,13 @@ function MainWorkspace({ setToken, reportLoading }) {
       setActiveView("dashboard");
       return;
     }
-    if (activeView === "cash-closing") {
-      setActiveView("dashboard");
-      return;
-    }
-    if (activeView === "register") {
-      setActiveView("dashboard");
-      return;
-    }
-    if (activeView === "client-debt") {
+    if (activeView === "cash-closing" && !isAdmin && !isManager) {
       setActiveView("dashboard");
     }
   }, [
     activeView,
     isAdmin,
+    isManager,
     canViewReports,
     canManageExpenses,
   ]);
@@ -251,6 +267,13 @@ function MainWorkspace({ setToken, reportLoading }) {
   const handleApply = () => fetchAll(from, to);
 
   const handleReset = () => {
+    if (isCashier) {
+      const t = new Date().toISOString().slice(0, 10);
+      setFrom(t);
+      setTo(t);
+      fetchAll(t, t);
+      return;
+    }
     setFrom("2020-01-01");
     setTo("2030-01-01");
     fetchAll("2020-01-01", "2030-01-01");
@@ -324,7 +347,7 @@ function MainWorkspace({ setToken, reportLoading }) {
           onToChange={setTo}
           onApply={handleApply}
           onReset={handleReset}
-          canViewFinancial={isAdmin || canViewReports}
+          canViewFinancial={isAdmin || isManager || canViewReports}
           isAdmin={isAdmin}
         />
       ) : null}
@@ -339,7 +362,7 @@ function MainWorkspace({ setToken, reportLoading }) {
           onRefreshWorkspace={() => fetchAll(from, to)}
           canCreateSales={canCreateSales}
           canEditSales={canEditSales}
-          canDeleteSales={canDeleteSales}
+          canVoidSales={canVoidSales}
         />
       ) : null}
 

@@ -11,6 +11,16 @@ import {
 } from "../utils/erpAggregates";
 import { formatMoneyDZD, formatNumber, safeNum, safeText } from "../utils/erpFormat";
 
+function readUserRole() {
+  try {
+    const raw = localStorage.getItem("user");
+    const u = raw ? JSON.parse(raw) : null;
+    return String(u && u.role ? u.role : "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
 function parseRangeBounds(fromIso, toIso) {
   const a = new Date(`${fromIso}T00:00:00`);
   const b = new Date(`${toIso}T23:59:59.999`);
@@ -30,6 +40,10 @@ function paymentsInRange(payments, fromIso, toIso) {
 
 export default function ReportsView({ sales, payments, from, to }) {
   const { t } = useLocale();
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const isCashierOnly = readUserRole() === "cashier";
+  const reportFrom = isCashierOnly ? todayIso : from;
+  const reportTo = isCashierOnly ? todayIso : to;
   const [serverReport, setServerReport] = useState(null);
   const [dashboardFallback, setDashboardFallback] = useState(null);
   const [fallbackExpenses, setFallbackExpenses] = useState({
@@ -43,7 +57,7 @@ export default function ReportsView({ sales, payments, from, to }) {
     (async () => {
       try {
         const res = await api.get("/api/reports", {
-          params: { from, to },
+          params: { from: reportFrom, to: reportTo },
         });
         if (!cancelled && res.data) {
           setServerReport(res.data);
@@ -55,7 +69,7 @@ export default function ReportsView({ sales, payments, from, to }) {
     return () => {
       cancelled = true;
     };
-  }, [from, to]);
+  }, [reportFrom, reportTo]);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,7 +80,7 @@ export default function ReportsView({ sales, payments, from, to }) {
     (async () => {
       try {
         const res = await api.get("/api/dashboard", {
-          params: { from, to },
+          params: { from: reportFrom, to: reportTo },
         });
         if (!cancelled && res.data) setDashboardFallback(res.data);
       } catch {
@@ -76,7 +90,7 @@ export default function ReportsView({ sales, payments, from, to }) {
     return () => {
       cancelled = true;
     };
-  }, [serverReport, from, to]);
+  }, [serverReport, reportFrom, reportTo]);
 
   useEffect(() => {
     if (serverReport != null) return;
@@ -84,7 +98,7 @@ export default function ReportsView({ sales, payments, from, to }) {
     (async () => {
       try {
         const res = await api.get("/api/expenses", {
-          params: { from, to },
+          params: { from: reportFrom, to: reportTo },
         });
         const list = Array.isArray(res.data) ? res.data : [];
         let daily = 0;
@@ -110,7 +124,7 @@ export default function ReportsView({ sales, payments, from, to }) {
     return () => {
       cancelled = true;
     };
-  }, [serverReport, from, to]);
+  }, [serverReport, reportFrom, reportTo]);
 
   const byDay = useMemo(() => groupSalesByDay(sales), [sales]);
   const byMonth = useMemo(() => groupSalesByMonth(sales), [sales]);
@@ -144,8 +158,8 @@ export default function ReportsView({ sales, payments, from, to }) {
   }, [serverReport, topCliLocal]);
 
   const payFiltered = useMemo(
-    () => paymentsInRange(payments, from, to),
-    [payments, from, to]
+    () => paymentsInRange(payments, reportFrom, reportTo),
+    [payments, reportFrom, reportTo]
   );
   const payCount = payFiltered.length;
   const cashInFallback = safeNum(dashboardFallback?.stats?.cashIn, 0);
@@ -181,8 +195,11 @@ export default function ReportsView({ sales, payments, from, to }) {
           <span> {t("reports.unavailable")}</span>
         ) : null}
       </p>
-
-      {serverReport ? (
+      {isCashierOnly ? (
+        <p className="erp-card-hint" role="note">
+          {t("reports.cashierDailyOnly")}
+        </p>
+      ) : null}
         <div className="erp-kpi-grid" style={{ marginBottom: "1rem" }}>
           <div className="erp-card erp-card-kpi">
             <p className="erp-card-label">{t("reports.expDaily")}</p>
