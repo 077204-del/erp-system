@@ -6,6 +6,7 @@ import ErpModuleFooter from "../components/ErpModuleFooter";
 import NewSaleModal from "../components/NewSaleModal";
 import ProductFormModal from "../components/ProductFormModal";
 import ClientFormModal from "../components/ClientFormModal";
+import ErpSearchSelect from "../components/ErpSearchSelect";
 import { useErpUi } from "../context/ErpUiContext";
 import { useLocale } from "../context/LocaleContext";
 import {
@@ -60,7 +61,7 @@ export function DashboardView({
     dashboard?.salesCount ?? dashboard?.sales,
     0
   );
-  const kpiSkeletonCount = isAdmin ? 7 : 6;
+  const kpiSkeletonCount = canViewFinancial ? (isAdmin ? 8 : 7) : 2;
 
   const lowStockItems = Array.isArray(products)
     ? products.filter((p) => p.lowStock === true)
@@ -158,16 +159,18 @@ export function DashboardView({
               {canViewFinancial ? (
                 <>
                   <KpiCard
-                    label={t("dashboard.profit")}
-                    value={formatMoneyDZD(safeNum(dashboard?.profit, 0))}
-                    hint={t("dashboard.profitHint")}
-                    tone="violet"
+                    label={t("dashboard.totalCashIn")}
+                    value={formatMoneyDZD(safeNum(dashboard?.netCashFlow, 0))}
+                    hint={t("dashboard.totalCashInHint")}
+                    tone="cyan"
                   />
                   <KpiCard
-                    label={t("dashboard.debt")}
-                    value={formatMoneyDZD(safeNum(dashboard?.debt, 0))}
-                    hint={t("dashboard.debtHint")}
-                    tone="amber"
+                    label={t("dashboard.grossProfit")}
+                    value={formatMoneyDZD(
+                      safeNum(dashboard?.grossProfit ?? dashboard?.profit, 0)
+                    )}
+                    hint={t("dashboard.grossProfitHint")}
+                    tone="violet"
                   />
                   <KpiCard
                     label={t("dashboard.totalExpenses")}
@@ -176,12 +179,16 @@ export function DashboardView({
                     tone="slate"
                   />
                   <KpiCard
-                    label={t("dashboard.netCashFlow")}
-                    value={formatMoneyDZD(
-                      safeNum(dashboard?.netCashFlow, 0)
-                    )}
-                    hint={t("dashboard.netCashFlowHint")}
-                    tone="cyan"
+                    label={t("dashboard.realProfit")}
+                    value={formatMoneyDZD(safeNum(dashboard?.realProfit, 0))}
+                    hint={t("dashboard.realProfitHint")}
+                    tone="mint"
+                  />
+                  <KpiCard
+                    label={t("dashboard.debt")}
+                    value={formatMoneyDZD(safeNum(dashboard?.debt, 0))}
+                    hint={t("dashboard.debtHint")}
+                    tone="amber"
                   />
                 </>
               ) : null}
@@ -442,6 +449,7 @@ export function ProductsView({
   initialSyncDone,
   isAdmin = true,
   canManageProducts = false,
+  canViewCostPrice = false,
   onRefreshWorkspace,
 }) {
   const { t } = useLocale();
@@ -472,7 +480,16 @@ export function ProductsView({
     },
     { key: "qty", header: t("productForm.stock"), numeric: true },
     { key: "salePrice", header: t("productForm.sellingPrice"), numeric: true, currency: true },
-    { key: "costPrice", header: t("productForm.purchasePrice"), numeric: true, currency: true },
+    ...(canViewCostPrice
+      ? [
+          {
+            key: "costPrice",
+            header: t("productForm.purchasePrice"),
+            numeric: true,
+            currency: true,
+          },
+        ]
+      : []),
     {
       key: "lowStockThreshold",
       header: t("productForm.minimumStock"),
@@ -597,6 +614,7 @@ export function ProductsView({
         product={editing}
         t={t}
         toast={toast}
+        canViewCostPrice={canViewCostPrice}
         onClose={() => {
           setModalOpen(false);
           setEditing(null);
@@ -903,22 +921,24 @@ export function PaymentsView({
         <div className="erp-sale-flow-grid">
           <div className="erp-field">
             <label htmlFor="pay-collect-client">{t("paymentCollect.client")}</label>
-            <select
+            <ErpSearchSelect
               id="pay-collect-client"
               value={collectClientId}
-              onChange={(e) => {
-                setCollectClientId(e.target.value);
+              onChange={(id) => {
+                setCollectClientId(id);
                 setCollectSaleId("");
               }}
               disabled={collectSaving || !canCreatePayments}
-            >
-              <option value="">{t("saleFlow.pickClient")}</option>
-              {(Array.isArray(clients) ? clients : []).map((c) => (
-                <option key={c._id} value={c._id}>
-                  {safeText(c.name, "—")}
-                </option>
-              ))}
-            </select>
+              placeholder={t("saleFlow.pickClient")}
+              emptyMessage={t("saleFlow.noClientMatch")}
+              aria-label={t("paymentCollect.client")}
+              options={(Array.isArray(clients) ? clients : []).map((c) => ({
+                _id: c._id,
+                name: safeText(c.name, "—"),
+              }))}
+              getOptionValue={(o) => String(o._id)}
+              getOptionLabel={(o) => o.name}
+            />
           </div>
           <div className="erp-field">
             <label htmlFor="pay-collect-sale">{t("paymentCollect.saleOptional")}</label>

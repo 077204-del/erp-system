@@ -10,6 +10,7 @@ import {
   safeNum,
   safeText,
 } from "../utils/erpFormat";
+import ErpSearchSelect from "./ErpSearchSelect";
 
 function saleProductId(s) {
   if (!s) return "";
@@ -254,37 +255,40 @@ export default function NewSaleModal({
           <div className="erp-sale-flow-grid">
           <div className="erp-field">
             <label htmlFor="sale-product">{t("saleFlow.product")}</label>
-            <select
+            <ErpSearchSelect
               id="sale-product"
               value={productId}
-              onChange={(e) => setProductId(e.target.value)}
+              onChange={setProductId}
               disabled={saving}
-            >
-              <option value="">{t("saleFlow.pickProduct")}</option>
-              {(Array.isArray(products) ? products : []).map((p) => (
-                <option key={String(p._id)} value={p._id}>
-                  {safeText(p.name, "—")} · {formatMoneyDZD(p.salePrice)} ·{" "}
-                  {t("saleFlow.stock")}: {formatNumber(p.qty)}
-                </option>
-              ))}
-            </select>
+              placeholder={t("saleFlow.pickProduct")}
+              emptyMessage={t("saleFlow.noProductMatch")}
+              aria-label={t("saleFlow.product")}
+              options={(Array.isArray(products) ? products : []).map((p) => ({
+                _id: p._id,
+                label: `${safeText(p.name, "—")} · ${formatMoneyDZD(p.salePrice)} · ${t("saleFlow.stock")}: ${formatNumber(p.qty)}`,
+              }))}
+              getOptionValue={(o) => String(o._id)}
+              getOptionLabel={(o) => o.label}
+            />
           </div>
 
           <div className="erp-field">
             <label htmlFor="sale-client">{t("saleFlow.client")}</label>
-            <select
+            <ErpSearchSelect
               id="sale-client"
               value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
+              onChange={setClientId}
               disabled={saving}
-            >
-              <option value="">{t("saleFlow.pickClient")}</option>
-              {(Array.isArray(clients) ? clients : []).map((c) => (
-                <option key={String(c._id)} value={c._id}>
-                  {safeText(c.name, "—")}
-                </option>
-              ))}
-            </select>
+              placeholder={t("saleFlow.pickClient")}
+              emptyMessage={t("saleFlow.noClientMatch")}
+              aria-label={t("saleFlow.client")}
+              options={(Array.isArray(clients) ? clients : []).map((c) => ({
+                _id: c._id,
+                name: safeText(c.name, "—"),
+              }))}
+              getOptionValue={(o) => String(o._id)}
+              getOptionLabel={(o) => o.name}
+            />
           </div>
 
           <div className="erp-field">

@@ -38,10 +38,17 @@ function paymentsInRange(payments, fromIso, toIso) {
   });
 }
 
-export default function ReportsView({ sales, payments, from, to }) {
+export default function ReportsView({
+  sales,
+  payments,
+  from,
+  to,
+  canViewFinancialKpis = false,
+}) {
   const { t } = useLocale();
   const todayIso = new Date().toISOString().slice(0, 10);
   const isCashierOnly = readUserRole() === "cashier";
+  const showFinancialKpis = canViewFinancialKpis && !isCashierOnly;
   const reportFrom = isCashierOnly ? todayIso : from;
   const reportTo = isCashierOnly ? todayIso : to;
   const [serverReport, setServerReport] = useState(null);
@@ -93,7 +100,7 @@ export default function ReportsView({ sales, payments, from, to }) {
   }, [serverReport, reportFrom, reportTo]);
 
   useEffect(() => {
-    if (serverReport != null) return;
+    if (serverReport != null || !showFinancialKpis) return;
     let cancelled = false;
     (async () => {
       try {
@@ -124,7 +131,7 @@ export default function ReportsView({ sales, payments, from, to }) {
     return () => {
       cancelled = true;
     };
-  }, [serverReport, reportFrom, reportTo]);
+  }, [serverReport, reportFrom, reportTo, showFinancialKpis]);
 
   const byDay = useMemo(() => groupSalesByDay(sales), [sales]);
   const byMonth = useMemo(() => groupSalesByMonth(sales), [sales]);
@@ -175,14 +182,20 @@ export default function ReportsView({ sales, payments, from, to }) {
 
   const expDaily = Number(serverReport?.expensesBreakdown?.daily);
   const expMonthly = Number(serverReport?.expensesBreakdown?.monthly);
-  const repNetCashFlow = Number(serverReport?.netProfit);
+  const repNetCashFlow = Number(
+    serverReport?.netCashFlow ?? serverReport?.netProfit
+  );
+  const repRealProfit = Number(
+    serverReport?.realProfit ??
+      (Number(serverReport?.profit) - Number(serverReport?.expensesBreakdown?.daily || 0) - Number(serverReport?.expensesBreakdown?.monthly || 0))
+  );
   const cvc = serverReport?.cashVsCredit;
   const cashPct =
     cvc && Number.isFinite(Number(cvc.ratioCash))
       ? Math.round(Number(cvc.ratioCash) * 100)
       : null;
 
-  const showFallbackKpis = !serverReport;
+  const showFallbackKpis = !serverReport && showFinancialKpis;
   const fbDaily = safeNum(fallbackExpenses.daily, 0);
   const fbMonthly = safeNum(fallbackExpenses.monthly, 0);
 
@@ -200,6 +213,8 @@ export default function ReportsView({ sales, payments, from, to }) {
           {t("reports.cashierDailyOnly")}
         </p>
       ) : null}
+
+      {serverReport && showFinancialKpis ? (
         <div className="erp-kpi-grid" style={{ marginBottom: "1rem" }}>
           <div className="erp-card erp-card-kpi">
             <p className="erp-card-label">{t("reports.expDaily")}</p>
@@ -216,13 +231,20 @@ export default function ReportsView({ sales, payments, from, to }) {
             <p className="erp-card-hint">{t("reports.kpiAllocHint")}</p>
           </div>
           <div className="erp-card erp-card-kpi">
-            <p className="erp-card-label">{t("dashboard.netCashFlow")}</p>
+            <p className="erp-card-label">{t("dashboard.totalCashIn")}</p>
             <p className="erp-card-value erp-num">
               {formatMoneyDZD(
                 Number.isFinite(repNetCashFlow) ? repNetCashFlow : 0
               )}
             </p>
-            <p className="erp-card-hint">{t("reports.kpiNetHint")}</p>
+            <p className="erp-card-hint">{t("dashboard.totalCashInHint")}</p>
+          </div>
+          <div className="erp-card erp-card-kpi">
+            <p className="erp-card-label">{t("dashboard.realProfit")}</p>
+            <p className="erp-card-value erp-num">
+              {formatMoneyDZD(Number.isFinite(repRealProfit) ? repRealProfit : 0)}
+            </p>
+            <p className="erp-card-hint">{t("dashboard.realProfitHint")}</p>
           </div>
           <div className="erp-card erp-card-kpi">
             <p className="erp-card-label">{t("reports.cashShare")}</p>

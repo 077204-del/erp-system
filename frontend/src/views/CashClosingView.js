@@ -2,7 +2,13 @@ import { useMemo } from "react";
 import ErpModuleFooter from "../components/ErpModuleFooter";
 import { useLocale } from "../context/LocaleContext";
 import { formatMoneyDZD, formatNumber, safeNum } from "../utils/erpFormat";
-export default function CashClosingView({ cash, dashboard, from, to }) {
+export default function CashClosingView({
+  cash,
+  dashboard,
+  from,
+  to,
+  canViewFinancial = false,
+}) {
   const { t } = useLocale();
   const recon = useMemo(() => {
     const a = safeNum(cash.cashSales, 0);
@@ -26,8 +32,12 @@ export default function CashClosingView({ cash, dashboard, from, to }) {
       `${t("cashClosing.rowDiff")}: ${formatMoneyDZD(recon.diff)}`,
       "",
       `${t("cashClosing.saleCount")}: ${formatNumber(dashboard.sales)}`,
-      `${t("cashClosing.profit")}: ${formatMoneyDZD(dashboard.profit)}`,
-      `${t("cashClosing.debt")}: ${formatMoneyDZD(dashboard.debt)}`,
+      ...(canViewFinancial
+        ? [
+            `${t("cashClosing.profit")}: ${formatMoneyDZD(dashboard.profit)}`,
+            `${t("cashClosing.debt")}: ${formatMoneyDZD(dashboard.debt)}`,
+          ]
+        : []),
       "",
       "Created by Habbal Hakim",
     ];
@@ -105,11 +115,18 @@ export default function CashClosingView({ cash, dashboard, from, to }) {
         <p className="erp-card-hint">
           {t("cashClosing.rangeHint")} {from} → {to}.{" "}
           {t("cashClosing.saleCount")}{" "}
-          <span className="erp-num">{formatNumber(dashboard.sales)}</span> ·{" "}
-          {t("cashClosing.profit")}{" "}
-          <span className="erp-num">{formatMoneyDZD(dashboard.profit)}</span> ·{" "}
-          {t("cashClosing.debt")}{" "}
-          <span className="erp-num">{formatMoneyDZD(dashboard.debt)}</span>
+          <span className="erp-num">{formatNumber(dashboard.sales)}</span>
+          {canViewFinancial ? (
+            <>
+              {" "}
+              · {t("cashClosing.profit")}{" "}
+              <span className="erp-num">
+                {formatMoneyDZD(dashboard.profit)}
+              </span>{" "}
+              · {t("cashClosing.debt")}{" "}
+              <span className="erp-num">{formatMoneyDZD(dashboard.debt)}</span>
+            </>
+          ) : null}
         </p>
         <button
           type="button"

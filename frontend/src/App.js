@@ -123,6 +123,8 @@ function MainWorkspace({ setToken, reportLoading }) {
     salesCount: 0,
     totalSales: 0,
     profit: 0,
+    grossProfit: 0,
+    realProfit: 0,
     debt: 0,
     totalExpenses: 0,
     netCashFlow: 0,
@@ -176,6 +178,8 @@ function MainWorkspace({ setToken, reportLoading }) {
   const canEditSales =
     isAdmin || isManager || isCashier || perms.canEditSales === true;
   const canVoidSales = isAdmin || isManager;
+  const canViewFinancialKpis = isAdmin || isManager;
+  const canViewCostPrice = isAdmin || isManager;
 
   useEffect(() => {
     reportLoading(loading);
@@ -209,6 +213,8 @@ function MainWorkspace({ setToken, reportLoading }) {
         salesCount: 0,
         totalSales: 0,
         profit: 0,
+        grossProfit: 0,
+        realProfit: 0,
         debt: 0,
         totalExpenses: 0,
         netCashFlow: 0,
@@ -403,7 +409,7 @@ function MainWorkspace({ setToken, reportLoading }) {
           onToChange={setTo}
           onApply={handleApply}
           onReset={handleReset}
-          canViewFinancial={isAdmin || isManager || canViewReports}
+          canViewFinancial={canViewFinancialKpis}
           isAdmin={isAdmin}
         />
       ) : null}
@@ -429,6 +435,7 @@ function MainWorkspace({ setToken, reportLoading }) {
           initialSyncDone={initialSyncDone}
           isAdmin={isAdmin}
           canManageProducts={canManageProducts}
+          canViewCostPrice={canViewCostPrice}
           onRefreshWorkspace={() => fetchAll(from, to)}
         />
       ) : null}
@@ -481,6 +488,7 @@ function MainWorkspace({ setToken, reportLoading }) {
           payments={payments}
           from={from}
           to={to}
+          canViewFinancialKpis={canViewFinancialKpis}
         />
       ) : null}
 
@@ -490,6 +498,7 @@ function MainWorkspace({ setToken, reportLoading }) {
           dashboard={dashboard}
           from={from}
           to={to}
+          canViewFinancial={canViewFinancialKpis}
         />
       ) : null}
 

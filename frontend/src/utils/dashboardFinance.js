@@ -1,45 +1,71 @@
 import { safeNum } from "./erpFormat";
 
 /**
- * Frontend financial semantics (aligned with API / ledger layer):
- * - Profit (Σ Sale.profit): margin fixed when each sale is created — never reduced by expenses.
- * - Cash in: Σ payments in range (real money received).
- * - Expenses: cash out — reduce net cash flow only.
- * - Net cash flow: cash in − expenses. UI state field is netCashFlow only; the API still
- *   returns this value as stats.netProfit — map here, never label as accrual profit.
+ * Cash in = payments in period (not reduced by expenses).
+ * Gross profit = Σ Sale.profit in range.
+ * Real profit = gross profit − expenses.
  */
-export function netCashFlowFromParts(cashIn, totalExpenses) {
-  return safeNum(cashIn, 0) - safeNum(totalExpenses, 0);
+export function netCashFlowFromParts(cashIn, _totalExpenses) {
+  return safeNum(cashIn, 0);
+}
+
+export function realProfitFromParts(grossProfit, totalExpenses) {
+  return safeNum(grossProfit, 0) - safeNum(totalExpenses, 0);
 }
 
 /**
  * Single mapper from GET /api/dashboard payload → React workspace state.
- * Keeps profit / debt / expenses / net cash flow in separate buckets (no UI-side mixing).
  */
 export function mapDashboardApiToState(data) {
   const stats = data?.stats || {};
   const cash = data?.cash || {};
+  const financial =
+    data?.access?.financialKpis === true || data?.access?.financial === true;
 
   const salesCount = Number.isFinite(Number(stats.sales))
     ? Number(stats.sales)
     : 0;
 
-  const debtVal = Number.isFinite(Number(stats.totalDebt))
-    ? Number(stats.totalDebt)
-    : Number.isFinite(Number(stats.debt))
-      ? Number(stats.debt)
-      : Number.isFinite(Number(data?.debt))
-        ? Number(data.debt)
-        : 0;
+  const debtVal = financial
+    ? Number.isFinite(Number(stats.totalDebt))
+      ? Number(stats.totalDebt)
+      : Number.isFinite(Number(stats.debt))
+        ? Number(stats.debt)
+        : Number.isFinite(Number(data?.debt))
+          ? Number(data.debt)
+          : 0
+    : 0;
 
-  const cashInVal = Number.isFinite(Number(stats.cashIn))
-    ? Number(stats.cashIn)
-    : Number.isFinite(Number(cash.totalCashIn))
-      ? Number(cash.totalCashIn)
-      : 0;
+  const cashInVal = financial
+    ? Number.isFinite(Number(stats.cashIn))
+      ? Number(stats.cashIn)
+      : Number.isFinite(Number(stats.netCashFlow))
+        ? Number(stats.netCashFlow)
+        : Number.isFinite(Number(stats.netProfit))
+          ? Number(stats.netProfit)
+          : Number.isFinite(Number(cash.totalCashIn))
+            ? Number(cash.totalCashIn)
+            : 0
+    : 0;
 
-  const netCashFlow = Number.isFinite(Number(stats.netProfit))
-    ? Number(stats.netProfit)
+  const totalExpenses = financial
+    ? Number.isFinite(Number(stats.totalExpenses))
+      ? Number(stats.totalExpenses)
+      : 0
+    : 0;
+
+  const grossProfit = financial
+    ? Number.isFinite(Number(stats.grossProfit))
+      ? Number(stats.grossProfit)
+      : Number.isFinite(Number(stats.profit))
+        ? Number(stats.profit)
+        : 0
+    : 0;
+
+  const realProfit = financial
+    ? Number.isFinite(Number(stats.realProfit))
+      ? Number(stats.realProfit)
+      : realProfitFromParts(grossProfit, totalExpenses)
     : 0;
 
   let invCap = null;
@@ -55,12 +81,12 @@ export function mapDashboardApiToState(data) {
       totalSales: Number.isFinite(Number(stats.totalSales))
         ? Number(stats.totalSales)
         : 0,
-      profit: Number.isFinite(Number(stats.profit)) ? Number(stats.profit) : 0,
+      profit: grossProfit,
+      grossProfit,
+      realProfit,
       debt: debtVal,
-      totalExpenses: Number.isFinite(Number(stats.totalExpenses))
-        ? Number(stats.totalExpenses)
-        : 0,
-      netCashFlow,
+      totalExpenses,
+      netCashFlow: cashInVal,
       inventoryCapital: invCap,
     },
     cash: {

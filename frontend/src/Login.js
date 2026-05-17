@@ -1,5 +1,6 @@
 import { useState } from "react";
 import api from "./api";
+import { invalidateWorkspaceCaches } from "./offline/responseCache";
 import ErpModuleFooter from "./components/ErpModuleFooter";
 import { useErpUi } from "./context/ErpUiContext";
 import { useLocale } from "./context/LocaleContext";
@@ -54,6 +55,11 @@ function Login({ onLogin, onLoadingChange }) {
         user.role = normalizeStoredRole(user.role);
       }
 
+      try {
+        invalidateWorkspaceCaches();
+      } catch {
+        /* ignore */
+      }
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
 

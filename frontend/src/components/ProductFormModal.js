@@ -12,6 +12,7 @@ export default function ProductFormModal({
   onSaved,
   toast,
   t,
+  canViewCostPrice = true,
 }) {
   const [name, setName] = useState("");
   const [barcode, setBarcode] = useState("");
@@ -56,11 +57,13 @@ export default function ProductFormModal({
       toast.warning(t("productForm.needName"));
       return;
     }
-    const cp = safeNum(purchasePrice, NaN);
+    const cp = canViewCostPrice
+      ? safeNum(purchasePrice, NaN)
+      : safeNum(product?.costPrice, 0);
     const sp = safeNum(sellingPrice, NaN);
     const q = safeNum(stock, NaN);
     const minS = safeNum(minimumStock, NaN);
-    if (!Number.isFinite(cp) || cp < 0) {
+    if (canViewCostPrice && (!Number.isFinite(cp) || cp < 0)) {
       toast.warning(t("productForm.needPurchase"));
       return;
     }
@@ -172,18 +175,20 @@ export default function ProductFormModal({
               autoComplete="off"
             />
           </div>
-          <div className="erp-field">
-            <label htmlFor="pf-cp">{t("productForm.purchasePrice")}</label>
-            <input
-              id="pf-cp"
-              type="number"
-              min={0}
-              step="0.01"
-              value={purchasePrice}
-              onChange={(e) => setPurchasePrice(e.target.value)}
-              disabled={saving}
-            />
-          </div>
+          {canViewCostPrice ? (
+            <div className="erp-field">
+              <label htmlFor="pf-cp">{t("productForm.purchasePrice")}</label>
+              <input
+                id="pf-cp"
+                type="number"
+                min={0}
+                step="0.01"
+                value={purchasePrice}
+                onChange={(e) => setPurchasePrice(e.target.value)}
+                disabled={saving}
+              />
+            </div>
+          ) : null}
           <div className="erp-field">
             <label htmlFor="pf-sp">{t("productForm.sellingPrice")}</label>
             <input

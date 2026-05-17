@@ -71,7 +71,7 @@ function ErpDataTable({
   const colCount = columns.length;
 
   return (
-    <div className="erp-table-system">
+    <div className="erp-table-system erp-table-system--pro">
       <div className="erp-table-toolbar">
         <input
           type="search"
