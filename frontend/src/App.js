@@ -119,11 +119,7 @@ function MainWorkspace({ setToken, reportLoading }) {
     salesCount: 0,
     totalSales: 0,
   });
-  const [dashboardAccess, setDashboardAccess] = useState({
-    financialKpis: false,
-    inventoryCapital: false,
-    costPrice: false,
-  });
+  const [dashboardMeta, setDashboardMeta] = useState({ role: "" });
 
   const [cash, setCash] = useState({
     cashSales: 0,
@@ -171,8 +167,10 @@ function MainWorkspace({ setToken, reportLoading }) {
   const canEditSales =
     isAdmin || isManager || isCashier || perms.canEditSales === true;
   const canVoidSales = isAdmin || isManager;
-  const canViewFinancialKpis = dashboardAccess.financialKpis === true;
-  const canViewCostPrice = dashboardAccess.costPrice === true;
+  const apiRole = dashboardMeta.role || "";
+  const canViewFinancialKpis =
+    apiRole === "admin" || apiRole === "manager";
+  const canViewCostPrice = apiRole === "admin";
 
   useEffect(() => {
     reportLoading(loading);
@@ -213,38 +211,24 @@ function MainWorkspace({ setToken, reportLoading }) {
 
     if (dashR.status === "fulfilled") {
       const mapped = mapDashboardApiToState(dashR.value.data);
-      setDashboardAccess(
-        mapped.access || {
-          financialKpis: false,
-          inventoryCapital: false,
-          costPrice: false,
-        }
-      );
+      setDashboardMeta(mapped.meta || { role: "" });
       setDashboard(mapped.dashboard);
       setCash(
         mapped.cash || {
-          cashSales: 0,
-          debtPayments: 0,
-          totalCashIn: 0,
+          cashSales: undefined,
+          debtPayments: undefined,
+          totalCashIn: undefined,
         }
       );
     } else {
       errs.push(apiErrorMessage(dashR.reason));
-      setDashboardAccess({
-        financialKpis: false,
-        inventoryCapital: false,
-        costPrice: false,
-      });
+      setDashboardMeta({ role: "" });
       setDashboard({
         sales: 0,
         salesCount: 0,
         totalSales: 0,
       });
-      setCash({
-        cashSales: 0,
-        debtPayments: 0,
-        totalCashIn: 0,
-      });
+      setCash({});
     }
 
     if (salesR.status === "fulfilled") {
@@ -431,9 +415,10 @@ function MainWorkspace({ setToken, reportLoading }) {
           onToChange={setTo}
           onApply={handleApply}
           onReset={handleReset}
-          canViewFinancial={dashboardAccess.financialKpis === true}
-          isAdmin={isAdmin}
-          isCashier={isCashier}
+          dashboardMeta={dashboardMeta}
+          canViewFinancial={canViewFinancialKpis}
+          isAdmin={apiRole === "admin"}
+          isCashier={apiRole === "cashier"}
         />
       ) : null}
 

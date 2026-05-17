@@ -1,103 +1,72 @@
 /**
-
- * Maps GET /api/dashboard → UI state. Display only — no financial math.
-
+ * Maps GET /api/dashboard → UI state. Display only — no calculations or fallbacks.
+ * Contract: meta.role drives visibility; financial.netProfit is the sole profit field.
  */
-
-export function mapDashboardApiToState(data) {
-
-  const stats = data?.stats || {};
-
-  const fin = data?.financial;
-
-  const cash = data?.cash || {};
-
-  const access = data?.access || {};
-
-  const financial = access.financialKpis === true;
-
-
-
-  const salesCount = Number(stats.sales) || 0;
-
-  const totalSales = Number(stats.totalSales) || 0;
-
-
-
-  if (!financial) {
-
-    return {
-
-      access,
-
-      dashboard: {
-
-        sales: salesCount,
-
-        salesCount,
-
-        totalSales,
-
-      },
-
-    };
-
-  }
-
-
-
-  const netProfit = Number(fin?.netProfit ?? stats.netProfit);
-
-  const expenses = Number(fin?.expenses ?? stats.expenses ?? stats.totalExpenses);
-
-
-
-  return {
-
-    access,
-
-    dashboard: {
-
-      sales: salesCount,
-
-      salesCount,
-
-      totalSales: Number(fin?.revenue ?? stats.totalSales ?? stats.revenue) || 0,
-
-      grossProfit: Number(fin?.grossProfit ?? stats.grossProfit) || 0,
-
-      realProfit: Number.isFinite(netProfit) ? netProfit : 0,
-
-      totalExpenses: Number.isFinite(expenses) ? expenses : 0,
-
-      debt: Number(stats.totalDebt) || Number(data.debt) || 0,
-
-      netCashFlow: Number(cash.totalCashIn ?? stats.cashIn ?? stats.netCashFlow) || 0,
-
-      inventoryCapital:
-
-        access.inventoryCapital === true &&
-
-        Number.isFinite(Number(stats.inventoryCapital))
-
-          ? Number(stats.inventoryCapital)
-
-          : null,
-
-    },
-
-    cash: {
-
-      cashSales: Number(cash.cashSales) || 0,
-
-      debtPayments: Number(cash.debtPayments) || 0,
-
-      totalCashIn: Number(cash.totalCashIn) || 0,
-
-    },
-
-  };
-
+function finiteNumber(value) {
+  if (value == null || value === "") return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
 }
 
+function isPrivilegedRole(role) {
+  return role === "admin" || role === "manager";
+}
 
+export function mapDashboardApiToState(data) {
+  const meta = data?.meta || {};
+  const role = meta.role;
+  const stats = data?.stats || {};
+  const fin = data?.financial;
+  const cash = data?.cash;
+
+  const dashboard = {};
+  const salesCount = finiteNumber(stats.salesCount);
+  const totalSales = finiteNumber(stats.totalSales);
+  const debt = finiteNumber(data?.debt);
+
+  if (salesCount !== undefined) {
+    dashboard.salesCount = salesCount;
+    dashboard.sales = salesCount;
+  }
+  if (totalSales !== undefined) {
+    dashboard.totalSales = totalSales;
+  }
+  if (debt !== undefined) {
+    dashboard.debt = debt;
+  }
+
+  if (!isPrivilegedRole(role)) {
+    return { meta, dashboard };
+  }
+
+  if (fin && typeof fin === "object") {
+    const revenue = finiteNumber(fin.revenue);
+    const grossProfit = finiteNumber(fin.grossProfit);
+    const netProfit = finiteNumber(fin.netProfit);
+    const expenses = finiteNumber(fin.expenses);
+    if (revenue !== undefined) dashboard.totalSales = revenue;
+    if (grossProfit !== undefined) dashboard.grossProfit = grossProfit;
+    if (netProfit !== undefined) dashboard.netProfit = netProfit;
+    if (expenses !== undefined) dashboard.totalExpenses = expenses;
+  }
+
+  const cashIn = finiteNumber(cash?.totalCashIn);
+  if (cashIn !== undefined) {
+    dashboard.netCashFlow = cashIn;
+  }
+
+  const inventoryCapital = finiteNumber(data?.inventoryCapital);
+  if (role === "admin" && inventoryCapital !== undefined) {
+    dashboard.inventoryCapital = inventoryCapital;
+  }
+
+  const cashOut = {};
+  const cashInVal = finiteNumber(cash?.totalCashIn);
+  if (cashInVal !== undefined) cashOut.totalCashIn = cashInVal;
+
+  return {
+    meta,
+    dashboard,
+    cash: Object.keys(cashOut).length > 0 ? cashOut : undefined,
+  };
+}

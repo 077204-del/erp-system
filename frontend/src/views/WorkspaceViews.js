@@ -51,11 +51,15 @@ export function DashboardView({
   onToChange,
   onApply,
   onReset,
+  dashboardMeta = {},
   canViewFinancial = false,
   isAdmin = false,
   isCashier = false,
 }) {
-  const showFinancial = canViewFinancial === true;
+  const metaRole = dashboardMeta?.role;
+  const showFinancial =
+    canViewFinancial === true &&
+    (metaRole === "admin" || metaRole === "manager");
   const { t } = useLocale();
   const showKpiSkeleton = loading && !initialSyncDone;
   const totalSalesKpi = safeNum(dashboard?.totalSales, 0);
@@ -63,7 +67,17 @@ export function DashboardView({
     dashboard?.salesCount ?? dashboard?.sales,
     0
   );
-  const kpiSkeletonCount = showFinancial ? (isAdmin ? 8 : 7) : 2;
+  const debtKpi =
+    dashboard?.debt != null && Number.isFinite(Number(dashboard.debt))
+      ? Number(dashboard.debt)
+      : null;
+  const kpiSkeletonCount = showFinancial
+    ? isAdmin
+      ? 8
+      : 7
+    : debtKpi != null
+      ? 3
+      : 2;
 
   const lowStockItems = Array.isArray(products)
     ? products.filter((p) => p.lowStock === true)
@@ -158,40 +172,52 @@ export function DashboardView({
                   tone="slate"
                 />
               ) : null}
+              {debtKpi != null ? (
+                <KpiCard
+                  label={t("dashboard.debt")}
+                  value={formatMoneyDZD(debtKpi)}
+                  hint={t("dashboard.debtHint")}
+                  tone="amber"
+                />
+              ) : null}
               {showFinancial ? (
                 <>
-                  <KpiCard
-                    label={t("dashboard.totalCashIn")}
-                    value={formatMoneyDZD(safeNum(dashboard?.netCashFlow, 0))}
-                    hint={t("dashboard.totalCashInHint")}
-                    tone="cyan"
-                  />
-                  <KpiCard
-                    label={t("dashboard.grossProfit")}
-                    value={formatMoneyDZD(
-                      safeNum(dashboard?.grossProfit, 0)
-                    )}
-                    hint={t("dashboard.grossProfitHint")}
-                    tone="violet"
-                  />
-                  <KpiCard
-                    label={t("dashboard.totalExpenses")}
-                    value={formatMoneyDZD(dashboard.totalExpenses ?? 0)}
-                    hint={t("dashboard.totalExpensesHint")}
-                    tone="slate"
-                  />
-                  <KpiCard
-                    label={t("dashboard.realProfit")}
-                    value={formatMoneyDZD(safeNum(dashboard?.realProfit, 0))}
-                    hint={t("dashboard.realProfitHint")}
-                    tone="mint"
-                  />
-                  <KpiCard
-                    label={t("dashboard.debt")}
-                    value={formatMoneyDZD(safeNum(dashboard?.debt, 0))}
-                    hint={t("dashboard.debtHint")}
-                    tone="amber"
-                  />
+                  {dashboard?.netCashFlow != null &&
+                  Number.isFinite(Number(dashboard.netCashFlow)) ? (
+                    <KpiCard
+                      label={t("dashboard.totalCashIn")}
+                      value={formatMoneyDZD(Number(dashboard.netCashFlow))}
+                      hint={t("dashboard.totalCashInHint")}
+                      tone="cyan"
+                    />
+                  ) : null}
+                  {dashboard?.grossProfit != null &&
+                  Number.isFinite(Number(dashboard.grossProfit)) ? (
+                    <KpiCard
+                      label={t("dashboard.grossProfit")}
+                      value={formatMoneyDZD(Number(dashboard.grossProfit))}
+                      hint={t("dashboard.grossProfitHint")}
+                      tone="violet"
+                    />
+                  ) : null}
+                  {dashboard?.totalExpenses != null &&
+                  Number.isFinite(Number(dashboard.totalExpenses)) ? (
+                    <KpiCard
+                      label={t("dashboard.totalExpenses")}
+                      value={formatMoneyDZD(Number(dashboard.totalExpenses))}
+                      hint={t("dashboard.totalExpensesHint")}
+                      tone="slate"
+                    />
+                  ) : null}
+                  {dashboard?.netProfit != null &&
+                  Number.isFinite(Number(dashboard.netProfit)) ? (
+                    <KpiCard
+                      label={t("dashboard.realProfit")}
+                      value={formatMoneyDZD(Number(dashboard.netProfit))}
+                      hint={t("dashboard.realProfitHint")}
+                      tone="mint"
+                    />
+                  ) : null}
                 </>
               ) : null}
             </>

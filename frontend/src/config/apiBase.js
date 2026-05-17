@@ -18,7 +18,7 @@ const DEPRECATED_HOST_PATTERNS = [
   /erp-system-3-/i,
 ];
 
-export const ERP_CACHE_SCHEMA = "erp_cache_v4";
+export const ERP_CACHE_SCHEMA = "erp_cache_v5";
 
 function normalizeBase(url) {
   return String(url || "")
