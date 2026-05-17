@@ -53,7 +53,9 @@ export function DashboardView({
   onReset,
   canViewFinancial = false,
   isAdmin = false,
+  isCashier = false,
 }) {
+  const showFinancial = canViewFinancial && !isCashier;
   const { t } = useLocale();
   const showKpiSkeleton = loading && !initialSyncDone;
   const totalSalesKpi = safeNum(dashboard?.totalSales, 0);
@@ -61,7 +63,7 @@ export function DashboardView({
     dashboard?.salesCount ?? dashboard?.sales,
     0
   );
-  const kpiSkeletonCount = canViewFinancial ? (isAdmin ? 8 : 7) : 2;
+  const kpiSkeletonCount = showFinancial ? (isAdmin ? 8 : 7) : 2;
 
   const lowStockItems = Array.isArray(products)
     ? products.filter((p) => p.lowStock === true)
@@ -156,7 +158,7 @@ export function DashboardView({
                   tone="slate"
                 />
               ) : null}
-              {canViewFinancial ? (
+              {showFinancial ? (
                 <>
                   <KpiCard
                     label={t("dashboard.totalCashIn")}
@@ -199,7 +201,7 @@ export function DashboardView({
 
       <section className="erp-section erp-section-tight-top">
         <div className="erp-two-col">
-          {canViewFinancial ? (
+          {showFinancial ? (
             <div className="erp-card erp-card-elevated">
               <p className="erp-card-label">{t("dashboard.cashFlow")}</p>
               <div className="erp-cash-flow">

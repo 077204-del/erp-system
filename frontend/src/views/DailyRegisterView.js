@@ -39,6 +39,7 @@ export default function DailyRegisterView({
   payments,
   onRefresh,
   loading,
+  canViewFinancial = false,
 }) {
   const { t } = useLocale();
   const [registerDate, setRegisterDate] = useState(() => todayIso());
@@ -61,9 +62,11 @@ export default function DailyRegisterView({
         api.get("/api/reports/daily-register", {
           params: { date: registerDate },
         }),
-        api.get("/api/expenses", {
-          params: { from: registerDate, to: registerDate },
-        }),
+        canViewFinancial
+          ? api.get("/api/expenses", {
+              params: { from: registerDate, to: registerDate },
+            })
+          : Promise.resolve({ status: "fulfilled", value: { data: [] } }),
       ]);
 
       if (sumRes.status === "fulfilled" && sumRes.value.data) {
@@ -103,7 +106,7 @@ export default function DailyRegisterView({
     } finally {
       setApiLoading(false);
     }
-  }, [registerDate]);
+  }, [registerDate, canViewFinancial]);
 
   useEffect(() => {
     loadDay();
@@ -132,11 +135,13 @@ export default function DailyRegisterView({
 
   const events = useMemo(() => {
     const base = buildRegisterEvents(filteredSales, filteredPayments);
-    const exp = expenseRowsToRegisterEvents(expenseRows).filter((e) =>
-      isSameCalendarDay(registerDate, e.at)
-    );
+    const exp = canViewFinancial
+      ? expenseRowsToRegisterEvents(expenseRows).filter((e) =>
+          isSameCalendarDay(registerDate, e.at)
+        )
+      : [];
     return [...base, ...exp].sort((a, b) => b.at - a.at);
-  }, [filteredSales, filteredPayments, expenseRows, registerDate]);
+  }, [filteredSales, filteredPayments, expenseRows, registerDate, canViewFinancial]);
 
   const exportJson = () => {
     const payload = {
@@ -225,12 +230,14 @@ export default function DailyRegisterView({
             {formatNumber(summary.cashIn)}
           </p>
         </div>
-        <div className="erp-card erp-card-kpi">
-          <p className="erp-card-label">{t("register.expensesDay")}</p>
-          <p className="erp-card-value erp-num">
-            {formatNumber(summary.expensesTotal)}
-          </p>
-        </div>
+        {canViewFinancial ? (
+          <div className="erp-card erp-card-kpi">
+            <p className="erp-card-label">{t("register.expensesDay")}</p>
+            <p className="erp-card-value erp-num">
+              {formatNumber(summary.expensesTotal)}
+            </p>
+          </div>
+        ) : null}
         <div className="erp-card erp-card-kpi">
           <p className="erp-card-label">{t("register.netCash")}</p>
           <p className="erp-card-value erp-num">

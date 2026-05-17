@@ -9,6 +9,11 @@ import { LocaleProvider, useLocale } from "./context/LocaleContext";
 import Login from "./Login";
 import { apiErrorMessage } from "./utils/erpFormat";
 import { mapDashboardApiToState } from "./utils/dashboardFinance";
+import {
+  normalizeRoleClient,
+  stripProductCostFields,
+  stripSaleFinancialFields,
+} from "./utils/rbacClient";
 import CashClosingView from "./views/CashClosingView";
 import ClientDebtView from "./views/ClientDebtView";
 import DailyRegisterView from "./views/DailyRegisterView";
@@ -58,13 +63,6 @@ function decodeJwtPayloadUnsafe() {
   } catch {
     return null;
   }
-}
-
-function normalizeRoleClient(role) {
-  let r = String(role || "").trim().toLowerCase();
-  if (r === "administrator" || r === "superadmin" || r === "owner") r = "admin";
-  if (r === "admin" || r === "manager" || r === "cashier") return r;
-  return r || "cashier";
 }
 
 /**
@@ -151,14 +149,14 @@ function MainWorkspace({ setToken, reportLoading }) {
 
   const initialFetchRef = useRef(false);
   const storedUser = readStoredUserWithJwtSync();
-  const roleLower = String(storedUser?.role || "").toLowerCase();
+  const roleLower = normalizeRoleClient(storedUser?.role);
   const isAdmin = roleLower === "admin";
   const isManager = roleLower === "manager";
   const isCashier = roleLower === "cashier";
   const permObj = storedUser?.permissions;
   const perms = permObj && typeof permObj === "object" ? permObj : {};
   const canViewReports =
-    isAdmin || isManager || perms.canViewReports === true || isCashier;
+    isAdmin || isManager || perms.canViewReports === true;
   const canManageExpenses =
     isAdmin || isManager || perms.canManageExpenses === true;
   const canManageProducts =
@@ -229,7 +227,10 @@ function MainWorkspace({ setToken, reportLoading }) {
 
     if (salesR.status === "fulfilled") {
       const data = salesR.value.data;
-      setSales(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setSales(
+        canViewFinancialKpis ? list : stripSaleFinancialFields(list)
+      );
     } else {
       errs.push(apiErrorMessage(salesR.reason));
       setSales([]);
@@ -237,7 +238,10 @@ function MainWorkspace({ setToken, reportLoading }) {
 
     if (prodR.status === "fulfilled") {
       const data = prodR.value.data;
-      setProducts(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setProducts(
+        canViewCostPrice ? list : stripProductCostFields(list)
+      );
     } else {
       errs.push(apiErrorMessage(prodR.reason));
       setProducts([]);
@@ -262,7 +266,7 @@ function MainWorkspace({ setToken, reportLoading }) {
     setFetchError(errs.filter(Boolean).join(" · "));
     setInitialSyncDone(true);
     setLoading(false);
-  }, []);
+  }, [canViewFinancialKpis, canViewCostPrice]);
 
   useEffect(() => {
     if (initialFetchRef.current) return;
@@ -409,8 +413,9 @@ function MainWorkspace({ setToken, reportLoading }) {
           onToChange={setTo}
           onApply={handleApply}
           onReset={handleReset}
-          canViewFinancial={canViewFinancialKpis}
+          canViewFinancial={canViewFinancialKpis && !isCashier}
           isAdmin={isAdmin}
+          isCashier={isCashier}
         />
       ) : null}
 
@@ -508,6 +513,7 @@ function MainWorkspace({ setToken, reportLoading }) {
           payments={payments}
           loading={loading}
           onRefresh={() => fetchAll(from, to)}
+          canViewFinancial={canViewFinancialKpis}
         />
       ) : null}
 

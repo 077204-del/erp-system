@@ -34,7 +34,7 @@ export default function CashClosingView({
       `${t("cashClosing.saleCount")}: ${formatNumber(dashboard.sales)}`,
       ...(canViewFinancial
         ? [
-            `${t("cashClosing.profit")}: ${formatMoneyDZD(dashboard.profit)}`,
+            `${t("cashClosing.profit")}: ${formatMoneyDZD(dashboard.realProfit ?? dashboard.profit)}`,
             `${t("cashClosing.debt")}: ${formatMoneyDZD(dashboard.debt)}`,
           ]
         : []),
@@ -121,7 +121,7 @@ export default function CashClosingView({
               {" "}
               · {t("cashClosing.profit")}{" "}
               <span className="erp-num">
-                {formatMoneyDZD(dashboard.profit)}
+                {formatMoneyDZD(dashboard.realProfit ?? dashboard.profit)}
               </span>{" "}
               · {t("cashClosing.debt")}{" "}
               <span className="erp-num">{formatMoneyDZD(dashboard.debt)}</span>

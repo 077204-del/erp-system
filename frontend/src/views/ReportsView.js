@@ -48,7 +48,7 @@ export default function ReportsView({
   const { t } = useLocale();
   const todayIso = new Date().toISOString().slice(0, 10);
   const isCashierOnly = readUserRole() === "cashier";
-  const showFinancialKpis = canViewFinancialKpis && !isCashierOnly;
+  const showFinancialKpis = canViewFinancialKpis === true && !isCashierOnly;
   const reportFrom = isCashierOnly ? todayIso : from;
   const reportTo = isCashierOnly ? todayIso : to;
   const [serverReport, setServerReport] = useState(null);
