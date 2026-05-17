@@ -17,6 +17,7 @@ const {
 } = require("./finance/ledger.service");
 const { normalizeRole } = require("./rbac.service");
 const {
+  resolveRole,
   canViewFinancialKpis,
   canViewInventoryCapital,
   buildAccess,
@@ -97,8 +98,12 @@ async function computeCore(from, to) {
  * @param {string} to
  * @param {string} userRole
  */
+function resolveUserRole(userRole) {
+  return resolveRole(userRole) || normalizeRole(userRole);
+}
+
 async function compute(from, to, userRole) {
-  const role = normalizeRole(userRole);
+  const role = resolveUserRole(userRole);
   const core = await computeCore(from, to);
   return {
     role,
@@ -110,6 +115,7 @@ async function compute(from, to, userRole) {
 
 function legacyStats(core, extras = {}) {
   return {
+    salesCount: core.salesCount,
     sales: core.salesCount,
     totalSales: core.revenue,
     revenue: core.revenue,
@@ -128,22 +134,16 @@ function legacyStats(core, extras = {}) {
 }
 
 async function buildDashboard(from, to, userRole) {
-  const { role, core, financialAllowed, inventoryAllowed } = await compute(
-    from,
-    to,
-    userRole
-  );
+  const role = resolveUserRole(userRole);
+  const core = await computeCore(from, to);
+  const totalDebt = toNumber(await getTotalOutstandingDebtFromLedger());
 
-  let totalDebt = 0;
-  let inventoryCapitalValue = null;
-  if (financialAllowed) {
-    totalDebt = toNumber(await getTotalOutstandingDebtFromLedger());
-    if (inventoryAllowed) {
-      try {
-        inventoryCapitalValue = toNumber(await getInventoryCapital());
-      } catch {
-        inventoryCapitalValue = 0;
-      }
+  let inventoryCapitalValue;
+  if (canViewInventoryCapital(role)) {
+    try {
+      inventoryCapitalValue = toNumber(await getInventoryCapital());
+    } catch {
+      inventoryCapitalValue = undefined;
     }
   }
 
@@ -151,24 +151,21 @@ async function buildDashboard(from, to, userRole) {
     {
       range: core.range,
       stats: legacyStats(core, {
-        totalDebt: financialAllowed ? totalDebt : 0,
-        inventoryCapital: inventoryAllowed ? inventoryCapitalValue : null,
+        totalDebt,
+        inventoryCapital: inventoryCapitalValue,
       }),
-      financial: financialAllowed
-        ? {
-            revenue: core.revenue,
-            cost: core.cost,
-            expenses: core.expenses,
-            grossProfit: core.grossProfit,
-            netProfit: core.netProfit,
-          }
-        : null,
+      financial: {
+        revenue: core.revenue,
+        cost: core.cost,
+        expenses: core.expenses,
+        grossProfit: core.grossProfit,
+        netProfit: core.netProfit,
+      },
       cash: {
-        cashSales: core.cashSales,
-        debtPayments: core.debtPayments,
         totalCashIn: core.cashIn,
       },
       debt: totalDebt,
+      inventoryCapital: inventoryCapitalValue,
     },
     role
   );

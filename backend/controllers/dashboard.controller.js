@@ -21,6 +21,8 @@ exports.getDashboard = async (req, res) => {
     }
 
     const body = await financialEngine.buildDashboard(from, to, role);
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+    res.setHeader("Pragma", "no-cache");
     return res.status(200).json(body);
   } catch (err) {
     console.error("DASHBOARD ERROR:", err && err.message ? err.message : err);

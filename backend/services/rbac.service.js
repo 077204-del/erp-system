@@ -79,7 +79,13 @@ function mergePermissions(role, stored) {
 
 function normalizeRole(role) {
   let r = String(role || "").trim().toLowerCase();
-  if (r === "administrator" || r === "superadmin" || r === "owner") {
+  if (
+    r === "administrator" ||
+    r === "administrateur" ||
+    r === "superadmin" ||
+    r === "super-admin" ||
+    r === "owner"
+  ) {
     r = "admin";
   }
   if (r === "admin" || r === "manager" || r === "cashier") return r;

@@ -20,7 +20,8 @@ export function mapDashboardApiToState(data) {
   const cash = data?.cash;
 
   const dashboard = {};
-  const salesCount = finiteNumber(stats.salesCount);
+  const salesCount =
+    finiteNumber(stats.salesCount) ?? finiteNumber(stats.sales);
   const totalSales = finiteNumber(stats.totalSales);
   const debt = finiteNumber(data?.debt);
 

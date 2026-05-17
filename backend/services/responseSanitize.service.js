@@ -8,7 +8,13 @@ function resolveRole(role) {
   if (role == null) return "";
   const r = String(role).trim().toLowerCase();
   if (!r) return "";
-  if (r === "administrator" || r === "superadmin" || r === "owner") {
+  if (
+    r === "administrator" ||
+    r === "administrateur" ||
+    r === "superadmin" ||
+    r === "super-admin" ||
+    r === "owner"
+  ) {
     return "admin";
   }
   if (r === "admin" || r === "manager" || r === "cashier") {
@@ -41,9 +47,8 @@ function canViewFinancialKpis(role) {
   return isAdmin(role) || isManager(role);
 }
 
-/** Product cost: admin only (managers see financial KPIs, not purchase price on products). */
 function canViewCostPrice(role) {
-  return isAdmin(role);
+  return isAdmin(role) || isManager(role);
 }
 
 function canViewInventoryCapital(role) {
@@ -131,8 +136,10 @@ function sanitizeSaleList(list, role) {
 
 function cashierOperationalStats(stats) {
   const s = stats && typeof stats === "object" ? stats : {};
+  const salesCount =
+    s.salesCount != null ? s.salesCount : s.sales;
   return {
-    sales: s.sales,
+    salesCount,
     totalSales: s.totalSales,
   };
 }
@@ -153,79 +160,87 @@ function statsForRole(stats, role) {
   return s;
 }
 
-function financialFromStats(stats) {
-  const s = stats || {};
-  return {
-    revenue: s.revenue,
-    cost: s.cost,
-    expenses: s.expenses ?? s.totalExpenses,
-    grossProfit: s.grossProfit,
-    netProfit: s.netProfit,
-    profit: s.profit ?? s.netProfit,
-    realProfit: s.realProfit ?? s.netProfit,
+function privilegedDashboardResponse(payload, role) {
+  const r = resolveRole(role);
+  const p = payload && typeof payload === "object" ? payload : {};
+  const raw = p.stats && typeof p.stats === "object" ? p.stats : {};
+  const salesCount =
+    raw.salesCount != null ? raw.salesCount : raw.sales;
+  const fin =
+    p.financial && typeof p.financial === "object"
+      ? p.financial
+      : {
+          revenue: raw.revenue,
+          cost: raw.cost,
+          expenses: raw.expenses ?? raw.totalExpenses,
+          grossProfit: raw.grossProfit,
+          netProfit: raw.netProfit,
+        };
+
+  const out = {
+    meta: {
+      role: r,
+      range: p.range || null,
+    },
+    stats: {
+      totalSales: raw.totalSales != null ? raw.totalSales : raw.revenue,
+      salesCount,
+    },
+    financial: {
+      revenue: fin.revenue,
+      cost: fin.cost,
+      expenses: fin.expenses,
+      grossProfit: fin.grossProfit,
+      netProfit: fin.netProfit,
+    },
+    cash: {
+      totalCashIn:
+        p.cash && p.cash.totalCashIn != null
+          ? p.cash.totalCashIn
+          : raw.cashIn,
+    },
   };
+
+  const debt = pickDebt(p);
+  if (debt !== undefined) out.debt = debt;
+
+  if (isAdmin(r) && raw.inventoryCapital != null) {
+    out.inventoryCapital = raw.inventoryCapital;
+  } else if (isAdmin(r) && p.inventoryCapital != null) {
+    out.inventoryCapital = p.inventoryCapital;
+  }
+
+  return out;
 }
 
 /**
- * Dashboard — identical top-level keys; restricted blocks only for cashier / unknown.
+ * Dashboard contract — cashier: stats + debt only; admin/manager: full financial block.
  */
 function sanitizeDashboardResponse(payload, role) {
-  const r = resolveRole(role);
+  const r = resolveRole(role) || normalizeRole(role);
   const p = payload && typeof payload === "object" ? payload : {};
-  const access = buildAccess(r);
-  const range = p.range || null;
 
-  if (isAdmin(r)) {
-    const stats = { ...(p.stats || {}) };
-    return {
-      range,
-      stats,
-      financial: p.financial != null ? p.financial : financialFromStats(stats),
-      cash: p.cash
-        ? {
-            cashSales: p.cash.cashSales,
-            debtPayments: p.cash.debtPayments,
-            totalCashIn: p.cash.totalCashIn,
-          }
-        : null,
-      debt: stats.totalDebt != null ? stats.totalDebt : p.debt ?? null,
-      access,
-    };
-  }
-
-  if (isCashier(r) || !canViewFinancialKpis(r)) {
-    return {
-      range,
+  if (isCashier(r)) {
+    const out = {
+      meta: { role: "cashier" },
       stats: cashierOperationalStats(p.stats || {}),
-      financial: null,
-      cash: null,
-      debt: null,
-      access,
     };
+    const debt = pickDebt(p);
+    if (debt !== undefined) out.debt = debt;
+    return out;
   }
 
-  const stats = statsForRole(p.stats || {}, r);
-  const cash = p.cash
-    ? {
-        cashSales: p.cash.cashSales,
-        debtPayments: p.cash.debtPayments,
-        totalCashIn: p.cash.totalCashIn,
-      }
-    : null;
-
-  let financial = p.financial;
-  if (financial == null) {
-    financial = financialFromStats(stats);
+  if (canViewFinancialKpis(r)) {
+    return privilegedDashboardResponse(p, r);
   }
 
-  return {
-    range,
-    stats,
-    financial,
-    cash,
-    debt: stats.totalDebt != null ? stats.totalDebt : p.debt ?? null,
-    access,
+  const out = {
+    meta: { role: r || "cashier" },
+    stats: cashierOperationalStats(p.stats || {}),
   };
+  const debt = pickDebt(p);
+  if (debt !== undefined) out.debt = debt;
+  return out;
 }
 
 function safeNum(v) {
