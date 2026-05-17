@@ -1,7 +1,13 @@
 import axios from "axios";
-import { getApiBaseUrl } from "./config/apiBase";
+import {
+  getApiBaseUrl,
+  initApiBaseRuntime,
+  isDeprecatedApiHost,
+} from "./config/apiBase";
 import { applyOfflineMutationGate } from "./offline/offlineRequestGate";
 import { installOfflineApi, tryServeCachedGet } from "./offline/installOfflineApi";
+
+initApiBaseRuntime();
 
 const api = axios.create({
   timeout: 60_000,
@@ -11,6 +17,13 @@ let apiBaseLogged = false;
 
 api.interceptors.request.use((config) => {
   const baseURL = getApiBaseUrl();
+  if (isDeprecatedApiHost(baseURL)) {
+    return Promise.reject(
+      new Error(
+        "Deprecated API host blocked. Use erp-system-1-rgd2.onrender.com only."
+      )
+    );
+  }
   config.baseURL = baseURL;
   if (!apiBaseLogged) {
     apiBaseLogged = true;

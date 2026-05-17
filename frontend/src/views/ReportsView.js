@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../api";
+import { freshGetConfig, workspaceGetParams } from "../config/apiRequest";
 import ErpModuleFooter from "../components/ErpModuleFooter";
 import { useLocale } from "../context/LocaleContext";
 import {
@@ -9,17 +10,7 @@ import {
   topClientsFromSales,
   topProductsFromSales,
 } from "../utils/erpAggregates";
-import { formatMoneyDZD, formatNumber, safeNum, safeText } from "../utils/erpFormat";
-
-function readUserRole() {
-  try {
-    const raw = localStorage.getItem("user");
-    const u = raw ? JSON.parse(raw) : null;
-    return String(u && u.role ? u.role : "").toLowerCase();
-  } catch {
-    return "";
-  }
-}
+import { formatMoneyDZD, formatNumber, safeText } from "../utils/erpFormat";
 
 function parseRangeBounds(fromIso, toIso) {
   const a = new Date(`${fromIso}T00:00:00`);
@@ -47,24 +38,17 @@ export default function ReportsView({
 }) {
   const { t } = useLocale();
   const todayIso = new Date().toISOString().slice(0, 10);
-  const isCashierOnly = readUserRole() === "cashier";
-  const showFinancialKpis = canViewFinancialKpis === true && !isCashierOnly;
-  const reportFrom = isCashierOnly ? todayIso : from;
-  const reportTo = isCashierOnly ? todayIso : to;
+  const reportFrom = canViewFinancialKpis ? from : todayIso;
+  const reportTo = canViewFinancialKpis ? to : todayIso;
   const [serverReport, setServerReport] = useState(null);
-  const [dashboardFallback, setDashboardFallback] = useState(null);
-  const [fallbackExpenses, setFallbackExpenses] = useState({
-    daily: 0,
-    monthly: 0,
-    total: 0,
-  });
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const res = await api.get("/api/reports", {
-          params: { from: reportFrom, to: reportTo },
+          ...freshGetConfig(),
+          params: workspaceGetParams({ from: reportFrom, to: reportTo }),
         });
         if (!cancelled && res.data) {
           setServerReport(res.data);
@@ -77,61 +61,6 @@ export default function ReportsView({
       cancelled = true;
     };
   }, [reportFrom, reportTo]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (serverReport != null) {
-      setDashboardFallback(null);
-      return undefined;
-    }
-    (async () => {
-      try {
-        const res = await api.get("/api/dashboard", {
-          params: { from: reportFrom, to: reportTo },
-        });
-        if (!cancelled && res.data) setDashboardFallback(res.data);
-      } catch {
-        if (!cancelled) setDashboardFallback(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [serverReport, reportFrom, reportTo]);
-
-  useEffect(() => {
-    if (serverReport != null || !showFinancialKpis) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await api.get("/api/expenses", {
-          params: { from: reportFrom, to: reportTo },
-        });
-        const list = Array.isArray(res.data) ? res.data : [];
-        let daily = 0;
-        let monthly = 0;
-        list.forEach((e) => {
-          const amt = safeNum(e.amount, 0);
-          if (e.type === "monthly") monthly += amt;
-          else daily += amt;
-        });
-        if (!cancelled) {
-          setFallbackExpenses({
-            daily,
-            monthly,
-            total: daily + monthly,
-          });
-        }
-      } catch {
-        if (!cancelled) {
-          setFallbackExpenses({ daily: 0, monthly: 0, total: 0 });
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [serverReport, reportFrom, reportTo, showFinancialKpis]);
 
   const byDay = useMemo(() => groupSalesByDay(sales), [sales]);
   const byMonth = useMemo(() => groupSalesByMonth(sales), [sales]);
@@ -169,11 +98,6 @@ export default function ReportsView({
     [payments, reportFrom, reportTo]
   );
   const payCount = payFiltered.length;
-  const cashInFallback = safeNum(dashboardFallback?.stats?.cashIn, 0);
-  const netCashFlowFromDashFallback = safeNum(
-    dashboardFallback?.stats?.netProfit,
-    0
-  );
 
   const maxDayRev = useMemo(() => {
     if (!byDay.length) return 1;
@@ -182,22 +106,13 @@ export default function ReportsView({
 
   const expDaily = Number(serverReport?.expensesBreakdown?.daily);
   const expMonthly = Number(serverReport?.expensesBreakdown?.monthly);
-  const repNetCashFlow = Number(
-    serverReport?.netCashFlow ?? serverReport?.netProfit
-  );
-  const repRealProfit = Number(
-    serverReport?.realProfit ??
-      (Number(serverReport?.profit) - Number(serverReport?.expensesBreakdown?.daily || 0) - Number(serverReport?.expensesBreakdown?.monthly || 0))
-  );
+  const repNetCashFlow = Number(serverReport?.netCashFlow);
+  const repNetProfit = Number(serverReport?.netProfit);
   const cvc = serverReport?.cashVsCredit;
   const cashPct =
     cvc && Number.isFinite(Number(cvc.ratioCash))
       ? Math.round(Number(cvc.ratioCash) * 100)
       : null;
-
-  const showFallbackKpis = !serverReport && showFinancialKpis;
-  const fbDaily = safeNum(fallbackExpenses.daily, 0);
-  const fbMonthly = safeNum(fallbackExpenses.monthly, 0);
 
   return (
     <section className="erp-section erp-section-flush-top">
@@ -208,13 +123,13 @@ export default function ReportsView({
           <span> {t("reports.unavailable")}</span>
         ) : null}
       </p>
-      {isCashierOnly ? (
+      {!canViewFinancialKpis ? (
         <p className="erp-card-hint" role="note">
           {t("reports.cashierDailyOnly")}
         </p>
       ) : null}
 
-      {serverReport && showFinancialKpis ? (
+      {serverReport && canViewFinancialKpis ? (
         <div className="erp-kpi-grid" style={{ marginBottom: "1rem" }}>
           <div className="erp-card erp-card-kpi">
             <p className="erp-card-label">{t("reports.expDaily")}</p>
@@ -242,7 +157,7 @@ export default function ReportsView({
           <div className="erp-card erp-card-kpi">
             <p className="erp-card-label">{t("dashboard.realProfit")}</p>
             <p className="erp-card-value erp-num">
-              {formatMoneyDZD(Number.isFinite(repRealProfit) ? repRealProfit : 0)}
+              {formatMoneyDZD(Number.isFinite(repNetProfit) ? repNetProfit : 0)}
             </p>
             <p className="erp-card-hint">{t("dashboard.realProfitHint")}</p>
           </div>
@@ -252,34 +167,6 @@ export default function ReportsView({
               {cashPct != null ? `${cashPct}%` : "—"}
             </p>
             <p className="erp-card-hint">{t("reports.kpiCashShareHint")}</p>
-          </div>
-        </div>
-      ) : null}
-
-      {showFallbackKpis ? (
-        <div className="erp-kpi-grid" style={{ marginBottom: "1rem" }}>
-          <div className="erp-card erp-card-kpi">
-            <p className="erp-card-label">
-              {t("reports.expDaily")} / {t("reports.expMonthly")}
-            </p>
-            <p className="erp-card-value erp-num">
-              {formatMoneyDZD(fbDaily)} · {formatMoneyDZD(fbMonthly)}
-            </p>
-            <p className="erp-card-hint">{t("reports.fallbackBadge")}</p>
-          </div>
-          <div className="erp-card erp-card-kpi">
-            <p className="erp-card-label">{t("dashboard.netCashFlow")}</p>
-            <p className="erp-card-value erp-num">
-              {formatMoneyDZD(netCashFlowFromDashFallback)}
-            </p>
-            <p className="erp-card-hint">{t("reports.fallbackNetHint")}</p>
-          </div>
-          <div className="erp-card erp-card-kpi">
-            <p className="erp-card-label">{t("dashboard.totalCashIn")}</p>
-            <p className="erp-card-value erp-num">
-              {formatMoneyDZD(cashInFallback)}
-            </p>
-            <p className="erp-card-hint">{t("reports.paymentsRegister")}</p>
           </div>
         </div>
       ) : null}
@@ -334,7 +221,7 @@ export default function ReportsView({
           <p className="erp-card-hint">
             {t("reports.paymentsRegister")}{" "}
             <span className="erp-num">{formatNumber(payCount)}</span>
-            {serverReport ? (
+            {serverReport && canViewFinancialKpis ? (
               <>
                 {" "}
                 · {t("reports.ledgerRev")}{" "}
@@ -346,19 +233,7 @@ export default function ReportsView({
                   {formatMoneyDZD(serverReport.cash?.totalCashIn)}
                 </span>
               </>
-            ) : (
-              <>
-                {" "}
-                · {t("reports.ledgerRev")}{" "}
-                <span className="erp-num">
-                  {formatMoneyDZD(safeNum(dashboardFallback?.stats?.totalSales, 0))}
-                </span>{" "}
-                · {t("reports.cashInSuffix")}{" "}
-                <span className="erp-num">
-                  {formatMoneyDZD(cashInFallback)}
-                </span>
-              </>
-            )}
+            ) : null}
           </p>
         </div>
 

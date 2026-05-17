@@ -1,9 +1,12 @@
+import { purgeApiCachesOnBoot } from "./responseCache";
 import { replayOfflineMutationQueue } from "./installOfflineApi";
 
 const SYNC_MS = 12_000;
 
 export function initOfflineBootstrap() {
   if (typeof window === "undefined") return () => {};
+
+  purgeApiCachesOnBoot();
 
   const tick = () => {
     if (navigator.onLine) {

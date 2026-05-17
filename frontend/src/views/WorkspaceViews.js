@@ -55,7 +55,7 @@ export function DashboardView({
   isAdmin = false,
   isCashier = false,
 }) {
-  const showFinancial = canViewFinancial && !isCashier;
+  const showFinancial = canViewFinancial === true;
   const { t } = useLocale();
   const showKpiSkeleton = loading && !initialSyncDone;
   const totalSalesKpi = safeNum(dashboard?.totalSales, 0);
@@ -169,7 +169,7 @@ export function DashboardView({
                   <KpiCard
                     label={t("dashboard.grossProfit")}
                     value={formatMoneyDZD(
-                      safeNum(dashboard?.grossProfit ?? dashboard?.profit, 0)
+                      safeNum(dashboard?.grossProfit, 0)
                     )}
                     hint={t("dashboard.grossProfitHint")}
                     tone="violet"

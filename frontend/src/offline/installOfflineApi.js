@@ -1,5 +1,5 @@
 import axios from "axios";
-import { getApiBaseUrl } from "../config/apiBase";
+import { getApiBaseUrl, isDeprecatedApiHost } from "../config/apiBase";
 import {
   cacheSuccessfulGet,
   invalidateWorkspaceCaches,
@@ -25,7 +25,7 @@ function maybeInvalidateWorkspaceCache(config, status) {
 }
 
 /**
- * Cache successful GETs (workspace + catalog).
+ * Cache successful GETs (workspace + catalog). Dashboard/reports are never cached.
  * @param {import("axios").AxiosInstance} client
  */
 export function installOfflineApi(client) {
@@ -53,9 +53,13 @@ let replayClient;
 
 function getReplayClient() {
   if (!replayClient) {
+    const base = getApiBaseUrl();
+    if (isDeprecatedApiHost(base)) {
+      throw new Error("Deprecated API host blocked for offline replay.");
+    }
     replayClient = axios.create({
       timeout: 120_000,
-      baseURL: getApiBaseUrl(),
+      baseURL: base,
     });
     replayClient.interceptors.request.use((config) => {
       config.__erpReplay = true;
@@ -112,6 +116,7 @@ export function tryServeCachedGet(err) {
   if (!err || !err.config) return null;
   const config = err.config;
   if (config.__erpReplay) return null;
+  if (config.__erpFresh === true) return null;
   if ((config.method || "get").toLowerCase() !== "get") return null;
   if (err.response) return null;
   const hit = readCachedGet(config);

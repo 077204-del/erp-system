@@ -8,12 +8,10 @@ import { ErpUiProvider, useErpUi } from "./context/ErpUiContext";
 import { LocaleProvider, useLocale } from "./context/LocaleContext";
 import Login from "./Login";
 import { apiErrorMessage } from "./utils/erpFormat";
+import { freshGetConfig, workspaceGetParams } from "./config/apiRequest";
 import { mapDashboardApiToState } from "./utils/dashboardFinance";
-import {
-  normalizeRoleClient,
-  stripProductCostFields,
-  stripSaleFinancialFields,
-} from "./utils/rbacClient";
+import { normalizeRoleClient } from "./utils/rbacClient";
+import { purgeApiCachesOnBoot } from "./offline/responseCache";
 import CashClosingView from "./views/CashClosingView";
 import ClientDebtView from "./views/ClientDebtView";
 import DailyRegisterView from "./views/DailyRegisterView";
@@ -120,13 +118,11 @@ function MainWorkspace({ setToken, reportLoading }) {
     sales: 0,
     salesCount: 0,
     totalSales: 0,
-    profit: 0,
-    grossProfit: 0,
-    realProfit: 0,
-    debt: 0,
-    totalExpenses: 0,
-    netCashFlow: 0,
-    inventoryCapital: null,
+  });
+  const [dashboardAccess, setDashboardAccess] = useState({
+    financialKpis: false,
+    inventoryCapital: false,
+    costPrice: false,
   });
 
   const [cash, setCash] = useState({
@@ -142,7 +138,6 @@ function MainWorkspace({ setToken, reportLoading }) {
   const [fetchError, setFetchError] = useState("");
   const [loading, setLoading] = useState(false);
   const [initialSyncDone, setInitialSyncDone] = useState(false);
-
   const rangeInit = initialRangeForRole();
   const [from, setFrom] = useState(rangeInit.from);
   const [to, setTo] = useState(rangeInit.to);
@@ -176,47 +171,74 @@ function MainWorkspace({ setToken, reportLoading }) {
   const canEditSales =
     isAdmin || isManager || isCashier || perms.canEditSales === true;
   const canVoidSales = isAdmin || isManager;
-  const canViewFinancialKpis = isAdmin || isManager;
-  const canViewCostPrice = isAdmin || isManager;
+  const canViewFinancialKpis = dashboardAccess.financialKpis === true;
+  const canViewCostPrice = dashboardAccess.costPrice === true;
 
   useEffect(() => {
     reportLoading(loading);
   }, [loading, reportLoading]);
+
+  useEffect(() => {
+    purgeApiCachesOnBoot();
+  }, []);
 
   const fetchAll = useCallback(async (fromDate, toDate) => {
     setFetchError("");
     setLoading(true);
     const errs = [];
 
+    const fresh = freshGetConfig();
     const [dashR, salesR, prodR, cliR, payR] = await Promise.allSettled([
       api.get("/api/dashboard", {
-        params: { from: fromDate, to: toDate },
+        ...fresh,
+        params: workspaceGetParams({ from: fromDate, to: toDate }),
       }),
       api.get("/api/sales", {
-        params: { from: fromDate, to: toDate },
+        ...fresh,
+        params: workspaceGetParams({ from: fromDate, to: toDate }),
       }),
-      api.get("/api/products"),
-      api.get("/api/clients"),
-      api.get("/api/payments"),
+      api.get("/api/products", {
+        ...fresh,
+        params: workspaceGetParams(),
+      }),
+      api.get("/api/clients", {
+        ...fresh,
+        params: workspaceGetParams(),
+      }),
+      api.get("/api/payments", {
+        ...fresh,
+        params: workspaceGetParams(),
+      }),
     ]);
 
     if (dashR.status === "fulfilled") {
-      const { dashboard: d, cash: c } = mapDashboardApiToState(dashR.value.data);
-      setDashboard(d);
-      setCash(c);
+      const mapped = mapDashboardApiToState(dashR.value.data);
+      setDashboardAccess(
+        mapped.access || {
+          financialKpis: false,
+          inventoryCapital: false,
+          costPrice: false,
+        }
+      );
+      setDashboard(mapped.dashboard);
+      setCash(
+        mapped.cash || {
+          cashSales: 0,
+          debtPayments: 0,
+          totalCashIn: 0,
+        }
+      );
     } else {
       errs.push(apiErrorMessage(dashR.reason));
+      setDashboardAccess({
+        financialKpis: false,
+        inventoryCapital: false,
+        costPrice: false,
+      });
       setDashboard({
         sales: 0,
         salesCount: 0,
         totalSales: 0,
-        profit: 0,
-        grossProfit: 0,
-        realProfit: 0,
-        debt: 0,
-        totalExpenses: 0,
-        netCashFlow: 0,
-        inventoryCapital: null,
       });
       setCash({
         cashSales: 0,
@@ -228,9 +250,7 @@ function MainWorkspace({ setToken, reportLoading }) {
     if (salesR.status === "fulfilled") {
       const data = salesR.value.data;
       const list = Array.isArray(data) ? data : [];
-      setSales(
-        canViewFinancialKpis ? list : stripSaleFinancialFields(list)
-      );
+      setSales(list);
     } else {
       errs.push(apiErrorMessage(salesR.reason));
       setSales([]);
@@ -239,9 +259,7 @@ function MainWorkspace({ setToken, reportLoading }) {
     if (prodR.status === "fulfilled") {
       const data = prodR.value.data;
       const list = Array.isArray(data) ? data : [];
-      setProducts(
-        canViewCostPrice ? list : stripProductCostFields(list)
-      );
+      setProducts(list);
     } else {
       errs.push(apiErrorMessage(prodR.reason));
       setProducts([]);
@@ -266,7 +284,7 @@ function MainWorkspace({ setToken, reportLoading }) {
     setFetchError(errs.filter(Boolean).join(" · "));
     setInitialSyncDone(true);
     setLoading(false);
-  }, [canViewFinancialKpis, canViewCostPrice]);
+  }, []);
 
   useEffect(() => {
     if (initialFetchRef.current) return;
@@ -413,7 +431,7 @@ function MainWorkspace({ setToken, reportLoading }) {
           onToChange={setTo}
           onApply={handleApply}
           onReset={handleReset}
-          canViewFinancial={canViewFinancialKpis && !isCashier}
+          canViewFinancial={dashboardAccess.financialKpis === true}
           isAdmin={isAdmin}
           isCashier={isCashier}
         />

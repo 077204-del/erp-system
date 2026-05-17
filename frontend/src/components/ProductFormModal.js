@@ -30,7 +30,9 @@ export default function ProductFormModal({
       setName(safeText(product.name, ""));
       setBarcode(safeText(product.barcode, ""));
       setCategory(safeText(product.category, ""));
-      setPurchasePrice(String(safeNum(product.costPrice, 0)));
+      setPurchasePrice(
+        canViewCostPrice ? String(safeNum(product.costPrice, 0)) : ""
+      );
       setSellingPrice(String(safeNum(product.salePrice, 0)));
       setStock(String(safeNum(product.qty, 0)));
       const th =
@@ -47,7 +49,7 @@ export default function ProductFormModal({
       setStock("0");
       setMinimumStock("5");
     }
-  }, [open, mode, product]);
+  }, [open, mode, product, canViewCostPrice]);
 
   useBodyScrollLock(open);
 
@@ -57,9 +59,7 @@ export default function ProductFormModal({
       toast.warning(t("productForm.needName"));
       return;
     }
-    const cp = canViewCostPrice
-      ? safeNum(purchasePrice, NaN)
-      : safeNum(product?.costPrice, 0);
+    const cp = canViewCostPrice ? safeNum(purchasePrice, NaN) : NaN;
     const sp = safeNum(sellingPrice, NaN);
     const q = safeNum(stock, NaN);
     const minS = safeNum(minimumStock, NaN);
@@ -84,11 +84,13 @@ export default function ProductFormModal({
       name: n,
       barcode: barcode.trim(),
       category: category.trim(),
-      costPrice: cp,
       salePrice: sp,
       qty: q,
       lowStockThreshold: minS,
     };
+    if (canViewCostPrice) {
+      body.costPrice = cp;
+    }
 
     setSaving(true);
     try {
