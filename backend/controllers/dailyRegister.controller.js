@@ -1,10 +1,5 @@
-const { getDashboardStats } = require("../services/finance/ledger.service");
-const { sumExpensesForRange } = require("../services/expenseQuery.service");
-
-function toNumber(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
+const financialEngine = require("../services/financialEngine.service");
+const { normalizeRole } = require("../services/rbac.service");
 
 function safeDateQuery(v) {
   if (v == null) return "";
@@ -19,7 +14,7 @@ exports.getDailyRegister = async (req, res) => {
       date = new Date().toISOString().slice(0, 10);
     }
 
-    const role = String(req.user && req.user.role ? req.user.role : "").toLowerCase();
+    const role = normalizeRole(req.user && req.user.role ? req.user.role : "");
     const today = new Date().toISOString().slice(0, 10);
     if (role === "cashier" && date !== today) {
       return res.status(403).json({
@@ -28,23 +23,8 @@ exports.getDailyRegister = async (req, res) => {
       });
     }
 
-    const dash = await getDashboardStats(date, date);
-
-    const salesTotal = toNumber(dash.stats && dash.stats.revenue);
-    const cashIn = toNumber(dash.cash && dash.cash.totalCashIn);
-    const paymentsTotal = cashIn;
-    const expensesTotal = await sumExpensesForRange(date, date);
-    const expNum = toNumber(expensesTotal);
-    const netCash = toNumber(cashIn - expNum);
-
-    return res.json({
-      date,
-      salesTotal,
-      paymentsTotal,
-      expensesTotal: expNum,
-      cashIn,
-      netCash: Number.isFinite(netCash) ? netCash : 0,
-    });
+    const body = await financialEngine.buildDailyRegister(date, date, role);
+    return res.json(body);
   } catch (err) {
     const msg =
       err && typeof err.message === "string" && err.message.trim()
@@ -58,6 +38,11 @@ exports.getDailyRegister = async (req, res) => {
       expensesTotal: 0,
       cashIn: 0,
       netCash: 0,
+      revenue: 0,
+      cost: 0,
+      expenses: 0,
+      grossProfit: 0,
+      netProfit: 0,
     });
   }
 };

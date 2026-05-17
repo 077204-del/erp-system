@@ -234,9 +234,6 @@ async function writeCreateSale(input) {
     const debt = Math.max(total - paid, 0);
     const finalStatus = saleStatusFromAmounts(total, paid, debt);
 
-    const costPrice = num(product.costPrice);
-    const profit = (unitPrice - costPrice) * qty;
-
     const [sale] = await Sale.create(
       [
         {
@@ -249,7 +246,7 @@ async function writeCreateSale(input) {
           paidAmount: paid,
           debt,
           status: finalStatus,
-          profit,
+          profit: 0,
           paymentMethod,
           saleDate: new Date(),
         },
@@ -500,9 +497,6 @@ async function writeUpdateSaleById(saleId, input, userId = null) {
 
     const debt = Math.max(total - paid, 0);
     const finalStatus = saleStatusFromAmounts(total, paid, debt);
-    const costPrice = num(newProduct.costPrice);
-    const profit = (unitPrice - costPrice) * qty;
-
     const dec = await Product.updateOne(
       { _id: productId, qty: { $gte: qty } },
       { $inc: { qty: -qty } },
@@ -540,7 +534,7 @@ async function writeUpdateSaleById(saleId, input, userId = null) {
     sale.paidAmount = paid;
     sale.debt = debt;
     sale.status = finalStatus;
-    sale.profit = profit;
+    sale.profit = 0;
     sale.paymentMethod = paymentMethod;
 
     await sale.save({ session });

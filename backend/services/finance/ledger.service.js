@@ -83,47 +83,28 @@ async function fetchPaymentsInDashboardRange(range) {
  * - totalDebt (global AR): use getTotalOutstandingDebtFromLedger() — Σ max(0, sales total − payments)
  *   per client. Do not mix with sum of Sale.debt snapshots in range.
  */
-async function getDashboardStats(from, to) {
+/**
+ * Raw ledger reads for financialEngine (no financial formulas here).
+ */
+async function fetchPeriodLedgerData(from, to) {
   const range = getDateRange(from, to);
-
   const [sales, payments] = await Promise.all([
-    Sale.find(buildSalesFilter(range)).lean(),
+    Sale.find(buildSalesFilter(range))
+      .populate("productId", "costPrice")
+      .lean(),
     fetchPaymentsInDashboardRange(range),
   ]);
-
-  const salesCount = sales.length;
-  const paymentsCount = payments.length;
-  const totalSalesRevenue = sales.reduce((acc, s) => acc + toNumber(s.total), 0);
-  const totalProfit = sales.reduce((acc, s) => acc + toNumber(s.profit), 0);
-  const totalDebt = sales.reduce((acc, s) => acc + toNumber(s.debt), 0);
-
-  // Cash movement: Payment documents only (never Sale.paidAmount).
-  const totalCashIn = payments.reduce((acc, p) => acc + toNumber(p.amount), 0);
-
-  const cashSales = payments
-    .filter((p) => p.type === "SALE_PAYMENT")
-    .reduce((acc, p) => acc + toNumber(p.amount), 0);
-
-  const debtPayments = payments
-    .filter((p) => p.type === "DIRECT_PAYMENT")
-    .reduce((acc, p) => acc + toNumber(p.amount), 0);
-
   return {
     range: { from, to },
-    stats: {
-      sales: salesCount,
-      revenue: totalSalesRevenue,
-      profit: totalProfit,
-    },
-    cash: {
-      cashSales,
-      debtPayments,
-      totalCashIn,
-    },
-    /** Sum of Sale.debt for lines with saleDate in range (informational only). */
-    periodSaleDebtFieldSum: totalDebt,
-    paymentsCount,
+    sales,
+    payments,
+    paymentsCount: payments.length,
   };
+}
+
+async function getDashboardStats(from, to) {
+  const { snapshotForLedger } = require("../financialEngine.service");
+  return snapshotForLedger(from, to);
 }
 
 async function getClosingStats(from, to) {
@@ -135,7 +116,8 @@ async function getClosingStats(from, to) {
     countSales: dashboard.stats.sales,
     countPayments: dashboard.paymentsCount,
     totalSales: dashboard.stats.revenue,
-    profit: dashboard.stats.profit,
+    grossProfit: dashboard.stats.grossProfit,
+    totalProductCost: dashboard.stats.totalProductCost,
     cashIn: dashboard.cash.totalCashIn,
     netCash: dashboard.cash.totalCashIn,
     debt: totalDebtGlobal,
@@ -157,7 +139,7 @@ async function getDailyClosingStats(date) {
     date,
     sales: {
       count: dashboard.stats.sales,
-      profit: dashboard.stats.profit,
+      grossProfit: dashboard.stats.grossProfit,
     },
     cash: {
       fromSales: dashboard.cash.cashSales,
@@ -183,10 +165,19 @@ async function getClientBalance(clientId, options = {}) {
   let paymentsQuery = Payment.find({ clientId });
 
   if (populateSalesProduct) {
-    salesQuery = salesQuery.populate("productId");
+    salesQuery = salesQuery.populate(
+      "productId",
+      "name salePrice qty barcode category lowStockThreshold"
+    );
   }
   if (populatePaymentsSale) {
-    paymentsQuery = paymentsQuery.populate("saleId");
+    paymentsQuery = paymentsQuery.populate({
+      path: "saleId",
+      populate: {
+        path: "productId",
+        select: "name salePrice qty barcode category lowStockThreshold",
+      },
+    });
   }
 
   const [sales, payments] = await Promise.all([salesQuery, paymentsQuery]);
@@ -214,7 +205,10 @@ async function getSalesList(from, to) {
   const filter = buildSalesFilter(range);
 
   return Sale.find(filter)
-    .populate("productId")
+    .populate(
+      "productId",
+      "name salePrice qty barcode category lowStockThreshold"
+    )
     .populate("clientId")
     .sort({ createdAt: -1 });
 }
@@ -360,6 +354,7 @@ async function getInventoryCapital() {
 }
 
 module.exports = {
+  fetchPeriodLedgerData,
   getDashboardStats,
   getClosingStats,
   getDailyClosingStats,

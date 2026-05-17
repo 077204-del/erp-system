@@ -2,6 +2,11 @@ const {
   getClientBalance,
   getClientById,
 } = require("../services/finance/ledger.service");
+const {
+  roleFromReq,
+  buildAccess,
+  sanitizeSale,
+} = require("../services/responseSanitize.service");
 
 // ======================
 // CLIENT TIMELINE (REAL ERP VIEW)
@@ -15,22 +20,20 @@ exports.getClientTimeline = async (req, res) => {
       return res.status(404).json({ message: "Client not found" });
     }
 
+    const role = roleFromReq(req);
     const summary = await getClientBalance(clientId, {
       includeLedger: true,
       populateSalesProduct: true,
       populatePaymentsSale: true,
     });
 
-    // ======================
-    // MERGE EVENTS
-    // ======================
     const timeline = [];
 
     summary.sales.forEach((s) => {
       timeline.push({
         type: "SALE",
         date: s.createdAt,
-        data: s
+        data: sanitizeSale(s, role),
       });
     });
 
@@ -38,13 +41,10 @@ exports.getClientTimeline = async (req, res) => {
       timeline.push({
         type: "PAYMENT",
         date: p.createdAt,
-        data: p
+        data: p,
       });
     });
 
-    // ======================
-    // SORT BY DATE DESC
-    // ======================
     timeline.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     return res.json({
@@ -52,18 +52,18 @@ exports.getClientTimeline = async (req, res) => {
         id: client._id,
         name: client.name,
         phone: client.phone,
-        storedDebt: client.totalDebt || 0
+        storedDebt: client.totalDebt || 0,
       },
 
       summary: {
         totalSales: summary.totalSales,
         totalPayments: summary.totalPaid,
-        realDebt: summary.balance
+        realDebt: summary.balance,
       },
 
-      timeline
+      timeline,
+      access: buildAccess(role),
     });
-
   } catch (err) {
     console.log("TIMELINE ERROR:", err.message);
     return res.status(500).json({ error: err.message });

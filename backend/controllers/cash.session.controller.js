@@ -1,20 +1,30 @@
-const { getDashboardStats } = require("../services/finance/ledger.service");
+const financialEngine = require("../services/financialEngine.service");
+const {
+  roleFromReq,
+  sanitizeCashSessionResponse,
+} = require("../services/responseSanitize.service");
 
 exports.getCashSession = async (req, res) => {
   try {
     const { date } = req.query;
     const from = date || null;
     const to = date || null;
-    const dashboard = await getDashboardStats(from, to);
+    const role = roleFromReq(req);
 
-    return res.json({
-      session: {
-        cashSales: dashboard.cash.cashSales,
-        debtPayments: dashboard.cash.debtPayments,
-        totalCashIn: dashboard.cash.totalCashIn,
-        profit: dashboard.stats.profit,
-      },
-    });
+    const { core } = await financialEngine.compute(from || "", to || "", role);
+
+    return res.json(
+      sanitizeCashSessionResponse(
+        {
+          cashSales: core.cashSales,
+          debtPayments: core.debtPayments,
+          totalCashIn: core.cashIn,
+          grossProfit: core.grossProfit,
+          netProfit: core.netProfit,
+        },
+        role
+      )
+    );
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

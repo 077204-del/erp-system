@@ -2,6 +2,11 @@ const {
   getClientBalance,
   getClientById,
 } = require("../services/finance/ledger.service");
+const {
+  roleFromReq,
+  buildAccess,
+  sanitizeClientLedger,
+} = require("../services/responseSanitize.service");
 
 // ======================
 // CLIENT FULL PROFILE (FIXED)
@@ -21,6 +26,9 @@ exports.getClientProfile = async (req, res) => {
       populatePaymentsSale: true,
     });
 
+    const role = roleFromReq(req);
+    const ledger = sanitizeClientLedger(summary, role);
+
     return res.json({
       client: {
         id: client._id,
@@ -36,8 +44,9 @@ exports.getClientProfile = async (req, res) => {
         realDebt: summary.balance
       },
 
-      sales: summary.sales,
-      payments: summary.payments
+      sales: ledger.sales,
+      payments: ledger.payments,
+      access: buildAccess(role),
     });
 
   } catch (err) {

@@ -22,6 +22,12 @@ const {
 const { appendAudit } = require("../services/auditLog.service");
 
 const { recordStockMovement } = require("../services/stockMovement.service");
+const {
+  roleFromReq,
+  canViewCostPrice,
+  sanitizeProduct,
+  sanitizeProductList,
+} = require("../services/responseSanitize.service");
 
 
 
@@ -132,7 +138,9 @@ exports.createProduct = async (req, res) => {
 
     );
 
-    res.status(201).json(enrichProduct(product));
+    res
+      .status(201)
+      .json(sanitizeProduct(enrichProduct(product), roleFromReq(req)));
 
   } catch (err) {
 
@@ -152,7 +160,12 @@ exports.getProducts = async (req, res) => {
 
     const products = await getProductsSorted();
 
-    res.json(products.map((p) => enrichProduct(p)));
+    res.json(
+      sanitizeProductList(
+        products.map((p) => enrichProduct(p)),
+        roleFromReq(req)
+      )
+    );
 
   } catch (err) {
 
@@ -327,7 +340,7 @@ exports.updateStock = async (req, res) => {
 
 
 
-    res.json(enrichProduct(product));
+    res.json(sanitizeProduct(enrichProduct(product), roleFromReq(req)));
 
   } catch (err) {
 
@@ -395,6 +408,11 @@ exports.updateProduct = async (req, res) => {
       return res.status(400).json({ message: "name cannot be empty" });
     }
 
+    const role = roleFromReq(req);
+    if (!canViewCostPrice(role)) {
+      delete patch.costPrice;
+    }
+
     const updated = await writeUpdateProductById(
 
       req.params.id,
@@ -435,7 +453,7 @@ exports.updateProduct = async (req, res) => {
 
 
 
-    res.json(enrichProduct(updated));
+    res.json(sanitizeProduct(enrichProduct(updated), roleFromReq(req)));
 
   } catch (err) {
 

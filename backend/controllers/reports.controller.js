@@ -1,9 +1,7 @@
-const {
-  getDashboardStats,
-  getSalesList,
-  getTotalOutstandingDebtFromLedger,
-} = require("../services/finance/ledger.service");
-const { sumExpenseSplitForRange } = require("../services/expenseQuery.service");
+const { getSalesList } = require("../services/finance/ledger.service");
+const financialEngine = require("../services/financialEngine.service");
+const { roleFromReq } = require("../services/responseSanitize.service");
+const { normalizeRole } = require("../services/rbac.service");
 
 function toNumber(value) {
   const n = Number(value);
@@ -57,7 +55,7 @@ exports.getReports = async (req, res) => {
     let f = safeString(from, "") || today;
     let t = safeString(to, "") || f;
 
-    const role = String(req.user && req.user.role ? req.user.role : "").toLowerCase();
+    const role = normalizeRole(req.user && req.user.role ? req.user.role : "");
     if (role === "cashier" && (f !== today || t !== today)) {
       return res.status(403).json({
         message:
@@ -66,7 +64,6 @@ exports.getReports = async (req, res) => {
       });
     }
 
-    const dash = await getDashboardStats(f, t);
     const sales = await getSalesList(f, t);
 
     const products = new Map();
@@ -75,8 +72,7 @@ exports.getReports = async (req, res) => {
     for (const s of sales) {
       const p = s.productId;
       const c = s.clientId;
-      const pid =
-        p && p._id != null ? String(p._id) : "unknown";
+      const pid = p && p._id != null ? String(p._id) : "unknown";
       const pname = p && p.name != null ? safeString(p.name, "—") : "—";
 
       const curP = products.get(pid) || {
@@ -126,39 +122,22 @@ exports.getReports = async (req, res) => {
         revenue: toNumber(x.revenue),
       }));
 
-    const stats = dash.stats || {};
-    const cash = dash.cash || {};
-    const totalCashIn = toNumber(cash.totalCashIn);
-    const expenseSplit = await sumExpenseSplitForRange(f, t);
-    const totalExpenses = toNumber(expenseSplit.total);
-    const netProfit = toNumber(totalCashIn - totalExpenses);
-    const totalDebtGlobal = toNumber(await getTotalOutstandingDebtFromLedger());
-
-    return res.json({
-      range: dash.range || { from: f, to: t },
-      revenue: toNumber(stats.revenue),
-      profit: toNumber(stats.profit),
-      salesCount: toNumber(stats.sales),
-      cash: {
-        cashSales: toNumber(cash.cashSales),
-        debtPayments: toNumber(cash.debtPayments),
-        totalCashIn,
-      },
-      debt: totalDebtGlobal,
+    const body = await financialEngine.buildReports(f, t, roleFromReq(req), {
       topProducts,
       topClients,
-      expensesBreakdown: {
-        daily: toNumber(expenseSplit.daily),
-        monthly: toNumber(expenseSplit.monthly),
-      },
-      netProfit: Number.isFinite(netProfit) ? netProfit : 0,
       cashVsCredit: cashVsCreditFromSalesList(sales),
     });
+
+    return res.json(body);
   } catch (err) {
     return res.status(500).json({
       message: safeString(err && err.message, "Server error"),
       range: { from: "", to: "" },
       revenue: 0,
+      cost: 0,
+      expenses: 0,
+      grossProfit: 0,
+      netProfit: 0,
       profit: 0,
       salesCount: 0,
       cash: {
@@ -170,7 +149,7 @@ exports.getReports = async (req, res) => {
       topProducts: [],
       topClients: [],
       expensesBreakdown: { daily: 0, monthly: 0 },
-      netProfit: 0,
+      netCashFlow: 0,
       cashVsCredit: {
         cashSales: 0,
         creditSales: 0,

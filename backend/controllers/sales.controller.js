@@ -8,6 +8,11 @@ const {
 const { getSalesList, getSaleById } = require("../services/finance/ledger.service");
 const { appendAudit } = require("../services/auditLog.service");
 const {
+  roleFromReq,
+  sanitizeSale,
+  sanitizeSaleList,
+} = require("../services/responseSanitize.service");
+const {
   renderProfessionalInvoicePdf,
   renderThermalInvoiceHtml,
 } = require("../services/invoiceRender.service");
@@ -81,12 +86,14 @@ exports.createSale = async (req, res, next) => {
       req
     );
 
+    const role = roleFromReq(req);
+    const safeSale = sanitizeSale(sale, role);
     const io = req.app.get("io");
     if (io) {
-      io.emit("new-sale", sale);
+      io.emit("new-sale", safeSale);
     }
 
-    return res.status(201).json(sale);
+    return res.status(201).json(safeSale);
   } catch (err) {
     return res.status(500).json({
       error: err.message,
@@ -102,7 +109,7 @@ exports.getSales = async (req, res, next) => {
     const { from, to } = req.query;
     const sales = await getSalesList(from, to);
 
-    return res.json(sales);
+    return res.json(sanitizeSaleList(sales, roleFromReq(req)));
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -166,12 +173,14 @@ exports.updateSale = async (req, res) => {
       req
     );
 
+    const role = roleFromReq(req);
+    const safeSale = sanitizeSale(sale, role);
     const io = req.app.get("io");
     if (io) {
-      io.emit("sale-updated", sale);
+      io.emit("sale-updated", safeSale);
     }
 
-    return res.json(sale);
+    return res.json(safeSale);
   } catch (err) {
     return res.status(500).json({
       error: err.message,
@@ -212,9 +221,10 @@ exports.paySale = async (req, res, next) => {
       req
     );
 
+    const role = roleFromReq(req);
     return res.json({
       message: "Payment applied",
-      sale: result.sale,
+      sale: sanitizeSale(result.sale, role),
     });
   } catch (err) {
     return res.status(500).json({

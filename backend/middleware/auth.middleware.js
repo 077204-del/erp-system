@@ -1,5 +1,8 @@
 const jwt = require("jsonwebtoken");
-const { mergeUserFromToken } = require("../services/rbac.service");
+const {
+  mergeUserFromToken,
+  normalizeRole,
+} = require("../services/rbac.service");
 
 function normalizeRoles(roles) {
   if (Array.isArray(roles)) {
@@ -26,7 +29,7 @@ const KNOWN_PERMISSIONS = new Set([
 
 function hasRequestedPermission(user, permissions) {
   if (!permissions.length) return true;
-  if (user && String(user.role || "").toLowerCase() === "admin") return true;
+  if (user && normalizeRole(user.role) === "admin") return true;
   const perms = user && user.permissions && typeof user.permissions === "object"
     ? user.permissions
     : {};
@@ -53,9 +56,10 @@ function authorize(allowedRoles) {
         (x) => !KNOWN_PERMISSIONS.has(x)
       );
 
+      const userRole = normalizeRole(req.user.role);
       if (
         requiredRoles.length &&
-        !requiredRoles.includes(req.user.role)
+        !requiredRoles.some((rr) => normalizeRole(rr) === userRole)
       ) {
         return res.status(403).json({ message: "Forbidden" });
       }

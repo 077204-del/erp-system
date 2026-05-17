@@ -5,6 +5,7 @@ function toNum(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Align expense date windows with saleDate filtering in ledger.service (local calendar day). */
 function rangeBoundsUTC(fromStr, toStr) {
   if (
     !fromStr ||
@@ -16,8 +17,16 @@ function rangeBoundsUTC(fromStr, toStr) {
   }
   const [fy, fm, fd] = String(fromStr).split("-").map(Number);
   const [ty, tm, td] = String(toStr).split("-").map(Number);
-  const start = new Date(Date.UTC(fy, fm - 1, fd, 0, 0, 0, 0));
-  const end = new Date(Date.UTC(ty, tm - 1, td, 23, 59, 59, 999));
+  let start = new Date(fy, fm - 1, fd, 0, 0, 0, 0);
+  let end = new Date(ty, tm - 1, td, 23, 59, 59, 999);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return null;
+  }
+  if (start > end) {
+    const t = start;
+    start = end;
+    end = t;
+  }
   return { start, end };
 }
 
