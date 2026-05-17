@@ -71,10 +71,18 @@ async function computeCore(from, to) {
 
   const cashIn = payments.reduce((acc, p) => acc + toNumber(p.amount), 0);
   const cashSales = payments
-    .filter((p) => p.type === "SALE_PAYMENT")
+    .filter((p) => {
+      const t = String(p.type || "SALE_PAYMENT").toUpperCase();
+      if (t === "DIRECT_PAYMENT") return false;
+      if (t === "SALE_PAYMENT") return true;
+      return p.saleId != null;
+    })
     .reduce((acc, p) => acc + toNumber(p.amount), 0);
   const debtPayments = payments
-    .filter((p) => p.type === "DIRECT_PAYMENT")
+    .filter((p) => {
+      const t = String(p.type || "").toUpperCase();
+      return t === "DIRECT_PAYMENT";
+    })
     .reduce((acc, p) => acc + toNumber(p.amount), 0);
 
   return {
@@ -163,6 +171,8 @@ async function buildDashboard(from, to, userRole) {
       },
       cash: {
         totalCashIn: core.cashIn,
+        cashSales: core.cashSales,
+        debtPayments: core.debtPayments,
       },
       debt: totalDebt,
       inventoryCapital: inventoryCapitalValue,

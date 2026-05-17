@@ -731,10 +731,14 @@ export function ClientsView({
                       confirmLabel: t("clientForm.deleteConfirm"),
                       onConfirm: async () => {
                         try {
-                          await api.delete(
+                          const res = await api.delete(
                             `/api/clients/${encodeURIComponent(String(r._id))}`
                           );
-                          toast.success(t("clientForm.deleted"));
+                          const msg =
+                            res.data && res.data.message
+                              ? String(res.data.message)
+                              : t("clientForm.deleted");
+                          toast.success(msg);
                           if (typeof onRefreshWorkspace === "function") {
                             onRefreshWorkspace();
                           }

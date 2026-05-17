@@ -210,6 +210,12 @@ function privilegedDashboardResponse(payload, role) {
         p.cash && p.cash.totalCashIn != null
           ? p.cash.totalCashIn
           : raw.cashIn,
+      cashSales:
+        p.cash && p.cash.cashSales != null ? p.cash.cashSales : raw.cashSales,
+      debtPayments:
+        p.cash && p.cash.debtPayments != null
+          ? p.cash.debtPayments
+          : raw.debtPayments,
     },
   };
 

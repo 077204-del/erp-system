@@ -8,6 +8,9 @@ const clientSchema = new mongoose.Schema(
     notes: { type: String, default: "" },
 
     totalDebt: { type: Number, default: 0 },
+
+    /** Soft-delete: hidden from lists; sales/payments history preserved. */
+    isArchived: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

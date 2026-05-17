@@ -316,7 +316,7 @@ async function getClientDebtLedger(clientId) {
 }
 
 async function getClientsSorted() {
-  return Client.find().sort({ createdAt: -1 });
+  return Client.find({ isArchived: { $ne: true } }).sort({ createdAt: -1 });
 }
 
 async function getUserByUsername(username) {

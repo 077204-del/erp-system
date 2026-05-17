@@ -63,7 +63,11 @@ export function mapDashboardApiToState(data) {
 
   const cashOut = {};
   const cashInVal = finiteNumber(cash?.totalCashIn);
+  const cashSalesVal = finiteNumber(cash?.cashSales);
+  const debtPaymentsVal = finiteNumber(cash?.debtPayments);
   if (cashInVal !== undefined) cashOut.totalCashIn = cashInVal;
+  if (cashSalesVal !== undefined) cashOut.cashSales = cashSalesVal;
+  if (debtPaymentsVal !== undefined) cashOut.debtPayments = debtPaymentsVal;
 
   return {
     meta,

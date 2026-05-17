@@ -112,12 +112,32 @@ exports.deleteClient = async (req, res) => {
       });
     }
     const [saleCount, paymentCount] = await Promise.all([
-      Sale.countDocuments({ clientId: id }),
+      Sale.countDocuments({ clientId: id, voided: { $ne: true } }),
       Payment.countDocuments({ clientId: id }),
     ]);
     if (saleCount > 0 || paymentCount > 0) {
-      return res.status(400).json({
-        message: "Cannot delete client with financial history",
+      const archived = await Client.findByIdAndUpdate(
+        id,
+        { $set: { isArchived: true } },
+        { new: true }
+      );
+      if (!archived) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+      appendAudit(
+        {
+          userId: req.user.id,
+          action: "CLIENT_ARCHIVED",
+          entityType: "Client",
+          entityId: id,
+          meta: { saleCount: safeNum(saleCount), paymentCount: safeNum(paymentCount) },
+        },
+        req
+      );
+      return res.json({
+        message:
+          "Client archived (sales and payment history preserved)",
+        archived: true,
         saleCount: safeNum(saleCount),
         paymentCount: safeNum(paymentCount),
       });
@@ -132,7 +152,7 @@ exports.deleteClient = async (req, res) => {
       },
       req
     );
-    res.json({ message: "Deleted" });
+    res.json({ message: "Deleted", archived: false });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
