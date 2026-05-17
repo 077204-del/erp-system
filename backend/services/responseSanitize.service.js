@@ -96,6 +96,18 @@ function toPlain(doc) {
   return doc;
 }
 
+function pickDebt(payload) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  const stats = p.stats && typeof p.stats === "object" ? p.stats : {};
+  if (stats.totalDebt != null && Number.isFinite(Number(stats.totalDebt))) {
+    return Number(stats.totalDebt);
+  }
+  if (p.debt != null && Number.isFinite(Number(p.debt))) {
+    return Number(p.debt);
+  }
+  return undefined;
+}
+
 function sanitizeProduct(doc, role) {
   const o = toPlain(doc);
   if (!o) return o;
