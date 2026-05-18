@@ -35,20 +35,38 @@ export default function ReportsView({
   from,
   to,
   canViewFinancialKpis = false,
+  isAdmin = false,
+  isManager = false,
+  onFromChange,
+  onToChange,
+  onApplyDates,
+  onReportPreset,
+  cashierId = "",
+  onCashierChange,
+  cashiers = [],
 }) {
   const { t } = useLocale();
   const todayIso = new Date().toISOString().slice(0, 10);
   const reportFrom = canViewFinancialKpis ? from : todayIso;
   const reportTo = canViewFinancialKpis ? to : todayIso;
   const [serverReport, setServerReport] = useState(null);
+  const showPrivilegedFilters =
+    canViewFinancialKpis === true && (isAdmin || isManager);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
+        const params = workspaceGetParams({
+          from: reportFrom,
+          to: reportTo,
+        });
+        if (showPrivilegedFilters && cashierId) {
+          params.cashierId = cashierId;
+        }
         const res = await api.get("/api/reports", {
           ...freshGetConfig(),
-          params: workspaceGetParams({ from: reportFrom, to: reportTo }),
+          params,
         });
         if (!cancelled && res.data) {
           setServerReport(res.data);
@@ -60,7 +78,7 @@ export default function ReportsView({
     return () => {
       cancelled = true;
     };
-  }, [reportFrom, reportTo]);
+  }, [reportFrom, reportTo, cashierId, showPrivilegedFilters]);
 
   const byDay = useMemo(() => groupSalesByDay(sales), [sales]);
   const byMonth = useMemo(() => groupSalesByMonth(sales), [sales]);
@@ -129,6 +147,87 @@ export default function ReportsView({
         </p>
       ) : null}
 
+      {showPrivilegedFilters ? (
+        <section
+          className="erp-page-toolbar erp-reports-toolbar"
+          aria-label={t("dashboard.period")}
+          style={{ marginBottom: "0.75rem" }}
+        >
+          <div className="erp-filter erp-filter--inline">
+            <div className="erp-field">
+              <label htmlFor="rep-from">{t("dashboard.from")}</label>
+              <input
+                id="rep-from"
+                type="date"
+                value={from}
+                onChange={(e) =>
+                  typeof onFromChange === "function" &&
+                  onFromChange(e.target.value)
+                }
+              />
+            </div>
+            <div className="erp-field">
+              <label htmlFor="rep-to">{t("dashboard.to")}</label>
+              <input
+                id="rep-to"
+                type="date"
+                value={to}
+                onChange={(e) =>
+                  typeof onToChange === "function" &&
+                  onToChange(e.target.value)
+                }
+              />
+            </div>
+            <div className="erp-field">
+              <label htmlFor="rep-cashier">{t("reports.cashierFilter")}</label>
+              <select
+                id="rep-cashier"
+                value={cashierId || ""}
+                onChange={(e) =>
+                  typeof onCashierChange === "function" &&
+                  onCashierChange(e.target.value)
+                }
+              >
+                <option value="">{t("reports.allCashiers")}</option>
+                {(Array.isArray(cashiers) ? cashiers : []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {safeText(c.username, c.id)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="erp-btn-row">
+            <button
+              type="button"
+              className="erp-btn erp-btn-ghost erp-btn-sm"
+              onClick={() =>
+                typeof onReportPreset === "function" && onReportPreset("today")
+              }
+            >
+              {t("reports.presetToday")}
+            </button>
+            <button
+              type="button"
+              className="erp-btn erp-btn-ghost erp-btn-sm"
+              onClick={() =>
+                typeof onReportPreset === "function" && onReportPreset("week")
+              }
+            >
+              {t("reports.presetWeek")}
+            </button>
+            <button
+              type="button"
+              className="erp-btn erp-btn-primary erp-btn-sm"
+              onClick={() =>
+                typeof onApplyDates === "function" && onApplyDates()
+              }
+            >
+              {t("reports.applyDates")}
+            </button>
+          </div>
+        </section>
+      ) : null}
       {serverReport && canViewFinancialKpis ? (
         <div className="erp-kpi-grid" style={{ marginBottom: "1rem" }}>
           <div className="erp-card erp-card-kpi">

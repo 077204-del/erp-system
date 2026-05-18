@@ -2705,6 +2705,22 @@
   border-bottom: none;
 }
 
+/* Dense ERP tables (e.g. products catalog) */
+.erp-table-system--dense .erp-table-toolbar {
+  margin-bottom: 0.35rem;
+}
+.erp-table-system--dense .erp-table th,
+.erp-table-system--dense .erp-table td {
+  padding: 0.4rem 0.52rem;
+  font-size: 0.8125rem;
+  line-height: 1.32;
+}
+.erp-table-system--dense .erp-table th {
+  font-size: 0.62rem;
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+}
+
 /* ========== Searchable select (replaces native <select>) ========== */
 .erp-search-select {
   position: relative;

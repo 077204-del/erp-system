@@ -27,6 +27,7 @@ function TableRowSkeleton({ colCount }) {
  * @param {boolean} props.showSkeleton
  * @param {string} props.emptyTitle
  * @param {string} [props.emptyHint]
+ * @param {"default"|"dense"} [props.density]
  */
 function ErpDataTable({
   columns,
@@ -38,6 +39,7 @@ function ErpDataTable({
   emptyTitle = "No records",
   emptyHint = "Try adjusting filters or date range.",
   searchPlaceholder = "Search…",
+  density = "default",
 }) {
   const { t } = useLocale();
   const [query, setQuery] = useState("");
@@ -70,8 +72,13 @@ function ErpDataTable({
 
   const colCount = columns.length;
 
+  const densityClass =
+    density === "dense" ? "erp-table-system--dense" : "";
+
   return (
-    <div className="erp-table-system erp-table-system--pro">
+    <div
+      className={`erp-table-system erp-table-system--pro ${densityClass}`.trim()}
+    >
       <div className="erp-table-toolbar">
         <input
           type="search"

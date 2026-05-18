@@ -16,6 +16,14 @@ const {
   renderProfessionalInvoicePdf,
   renderThermalInvoiceHtml,
 } = require("../services/invoiceRender.service");
+const mongoose = require("mongoose");
+const User = require("../models/user.model");
+
+function normalizeRoleForSalesFilter(role) {
+  const r = String(role || "").trim().toLowerCase();
+  if (r === "admin" || r === "manager" || r === "cashier") return r;
+  return "cashier";
+}
 
 function cashierSaleEditWindowMs() {
   const n = parseInt(process.env.CASHIER_SALE_EDIT_WINDOW_MINUTES || "30", 10);
@@ -106,12 +114,43 @@ exports.createSale = async (req, res, next) => {
 // ======================
 exports.getSales = async (req, res, next) => {
   try {
-    const { from, to } = req.query;
-    const sales = await getSalesList(from, to);
+    const { from, to, cashierId } = req.query;
+    const role = normalizeRoleForSalesFilter(req.user && req.user.role);
+    const canFilterByCashier = role === "admin" || role === "manager";
+    const rawCid = cashierId != null ? String(cashierId).trim() : "";
+    const listOpts =
+      canFilterByCashier && rawCid && mongoose.Types.ObjectId.isValid(rawCid)
+        ? { cashierId: rawCid }
+        : {};
+    const sales = await getSalesList(from, to, listOpts);
 
     return res.json(sanitizeSaleList(sales, roleFromReq(req)));
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+};
+
+/** Cashiers for sales/report filters (admin / manager only). */
+exports.listSaleCashiers = async (req, res) => {
+  try {
+    const role = normalizeRoleForSalesFilter(req.user && req.user.role);
+    if (role !== "admin" && role !== "manager") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const rows = await User.find({ role: "cashier" })
+      .select("username")
+      .sort({ username: 1 })
+      .lean();
+    return res.json(
+      rows.map((u) => ({
+        id: String(u._id),
+        username: u.username != null ? String(u.username) : "",
+      }))
+    );
+  } catch (err) {
+    return res.status(500).json({
+      message: err && err.message ? err.message : "Server error",
+    });
   }
 };
 

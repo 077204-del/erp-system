@@ -1,7 +1,9 @@
+const mongoose = require("mongoose");
 const { getSalesList } = require("../services/finance/ledger.service");
 const financialEngine = require("../services/financialEngine.service");
 const { roleFromReq } = require("../services/responseSanitize.service");
 const { normalizeRole } = require("../services/rbac.service");
+const User = require("../models/user.model");
 
 function toNumber(value) {
   const n = Number(value);
@@ -50,7 +52,7 @@ function cashVsCreditFromSalesList(sales) {
 
 exports.getReports = async (req, res) => {
   try {
-    const { from, to } = req.query;
+    const { from, to, cashierId } = req.query;
     const today = new Date().toISOString().slice(0, 10);
     let f = safeString(from, "") || today;
     let t = safeString(to, "") || f;
@@ -64,7 +66,14 @@ exports.getReports = async (req, res) => {
       });
     }
 
-    const sales = await getSalesList(f, t);
+    const canFilterByCashier = role === "admin" || role === "manager";
+    const rawCid = cashierId != null ? String(cashierId).trim() : "";
+    const listOpts =
+      canFilterByCashier && rawCid && mongoose.Types.ObjectId.isValid(rawCid)
+        ? { cashierId: rawCid }
+        : {};
+
+    const sales = await getSalesList(f, t, listOpts);
 
     const products = new Map();
     const clients = new Map();
@@ -126,9 +135,22 @@ exports.getReports = async (req, res) => {
       topProducts,
       topClients,
       cashVsCredit: cashVsCreditFromSalesList(sales),
+      cashierId: listOpts.cashierId,
     });
 
-    return res.json(body);
+    let cashiers = [];
+    if (role === "admin" || role === "manager") {
+      const rows = await User.find({ role: "cashier" })
+        .select("username")
+        .sort({ username: 1 })
+        .lean();
+      cashiers = rows.map((u) => ({
+        id: String(u._id),
+        username: safeString(u.username, ""),
+      }));
+    }
+
+    return res.json({ ...body, cashiers });
   } catch (err) {
     return res.status(500).json({
       message: safeString(err && err.message, "Server error"),

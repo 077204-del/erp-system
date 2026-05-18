@@ -9,7 +9,7 @@
  * cashIn = Σ payment.amount (expenses do NOT reduce cashIn)
  */
 
-const { fetchPeriodLedgerData } = require("./finance/ledger.service");
+const { fetchPeriodLedgerData, fetchPaymentTotalsBySaleIds } = require("./finance/ledger.service");
 const { sumExpensesForRange, sumExpenseSplitForRange } = require("./expenseQuery.service");
 const {
   getTotalOutstandingDebtFromLedger,
@@ -43,11 +43,13 @@ function productCostPrice(sale) {
  * Raw period metrics — no role filtering.
  * @param {string} from
  * @param {string} to
+ * @param {{ cashierId?: string }} [ledgerOptions] optional cashier scope (reports only)
  */
-async function computeCore(from, to) {
+async function computeCore(from, to, ledgerOptions = {}) {
   const { sales, payments, range, paymentsCount } = await fetchPeriodLedgerData(
     from,
-    to
+    to,
+    ledgerOptions
   );
 
   let revenue = 0;
@@ -69,8 +71,21 @@ async function computeCore(from, to) {
 
   const netProfit = toNumber(grossProfit - expenses);
 
-  const cashIn = payments.reduce((acc, p) => acc + toNumber(p.amount), 0);
-  const cashSales = payments
+  const saleIds = sales.map((s) => s && s._id).filter(Boolean);
+  const paymentTotalsBySale = await fetchPaymentTotalsBySaleIds(saleIds);
+  let orphanSaleCash = 0;
+  for (const s of sales) {
+    if (!s || !s._id) continue;
+    const sid = String(s._id);
+    const paidOnSale = toNumber(s.paidAmount);
+    const recordedForSale = paymentTotalsBySale.get(sid) ?? 0;
+    orphanSaleCash += Math.max(0, paidOnSale - recordedForSale);
+  }
+
+  const cashInFromPayments = payments.reduce((acc, p) => acc + toNumber(p.amount), 0);
+  const cashIn = toNumber(cashInFromPayments + orphanSaleCash);
+
+  const cashSalesFromPayments = payments
     .filter((p) => {
       const t = String(p.type || "SALE_PAYMENT").toUpperCase();
       if (t === "DIRECT_PAYMENT") return false;
@@ -78,6 +93,8 @@ async function computeCore(from, to) {
       return p.saleId != null;
     })
     .reduce((acc, p) => acc + toNumber(p.amount), 0);
+  const cashSales = toNumber(cashSalesFromPayments + orphanSaleCash);
+
   const debtPayments = payments
     .filter((p) => {
       const t = String(p.type || "").toUpperCase();
@@ -110,9 +127,9 @@ function resolveUserRole(userRole) {
   return resolveRole(userRole) || normalizeRole(userRole);
 }
 
-async function compute(from, to, userRole) {
+async function compute(from, to, userRole, ledgerOptions = {}) {
   const role = resolveUserRole(userRole);
-  const core = await computeCore(from, to);
+  const core = await computeCore(from, to, ledgerOptions);
   return {
     role,
     core,
@@ -238,7 +255,17 @@ async function buildCashClosing(from, to, userRole) {
 }
 
 async function buildReports(from, to, userRole, reportExtras = {}) {
-  const { role, core, financialAllowed } = await compute(from, to, userRole);
+  const cashierRaw =
+    reportExtras && reportExtras.cashierId != null
+      ? String(reportExtras.cashierId).trim()
+      : "";
+  const ledgerOpts = cashierRaw ? { cashierId: cashierRaw } : {};
+  const { role, core, financialAllowed } = await compute(
+    from,
+    to,
+    userRole,
+    ledgerOpts
+  );
   const expenseSplit = await sumExpenseSplitForRange(from, to);
   const totalDebtGlobal = toNumber(await getTotalOutstandingDebtFromLedger());
 

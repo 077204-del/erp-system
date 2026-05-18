@@ -208,8 +208,21 @@ async function writeCreateSale(input) {
 
     let paymentMethod = paymentMethodInput;
     let paid = num(paidAmountInput);
-    const ptype =
+    let ptype =
       paymentType != null ? String(paymentType).toLowerCase() : null;
+
+    if (!ptype) {
+      if (total <= 0) {
+        ptype = "credit";
+        paid = 0;
+      } else if (paid <= 0) {
+        ptype = "credit";
+      } else if (paid >= total) {
+        ptype = "cash";
+      } else {
+        ptype = "partial";
+      }
+    }
 
     if (ptype === "cash") {
       paid = total;
@@ -471,8 +484,21 @@ async function writeUpdateSaleById(saleId, input, userId = null) {
 
     let paymentMethod = paymentMethodInput;
     let paid = num(paidAmountInput);
-    const ptype =
+    let ptype =
       paymentType != null ? String(paymentType).toLowerCase() : null;
+
+    if (!ptype) {
+      if (total <= 0) {
+        ptype = "credit";
+        paid = 0;
+      } else if (paid <= 0) {
+        ptype = "credit";
+      } else if (paid >= total) {
+        ptype = "cash";
+      } else {
+        ptype = "partial";
+      }
+    }
 
     if (ptype === "cash") {
       paid = total;

@@ -134,6 +134,9 @@ function MainWorkspace({ setToken, reportLoading }) {
   const [fetchError, setFetchError] = useState("");
   const [loading, setLoading] = useState(false);
   const [initialSyncDone, setInitialSyncDone] = useState(false);
+  /** Admin/manager: filter workspace sales (and server reports) by cashier */
+  const [workspaceCashierId, setWorkspaceCashierId] = useState("");
+  const [saleCashiers, setSaleCashiers] = useState([]);
   const rangeInit = initialRangeForRole();
   const [from, setFrom] = useState(rangeInit.from);
   const [to, setTo] = useState(rangeInit.to);
@@ -180,12 +183,42 @@ function MainWorkspace({ setToken, reportLoading }) {
     purgeApiCachesOnBoot();
   }, []);
 
-  const fetchAll = useCallback(async (fromDate, toDate) => {
+  useEffect(() => {
+    if (!isAdmin && !isManager) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get("/api/sales/cashiers/list", freshGetConfig());
+        if (!cancelled && Array.isArray(res.data)) {
+          setSaleCashiers(res.data);
+        }
+      } catch {
+        if (!cancelled) setSaleCashiers([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, isManager]);
+
+  const fetchAll = useCallback(async (fromDate, toDate, opts = {}) => {
     setFetchError("");
     setLoading(true);
     const errs = [];
 
     const fresh = freshGetConfig();
+    const cashierForSales =
+      opts && Object.prototype.hasOwnProperty.call(opts, "cashierId")
+        ? opts.cashierId
+        : workspaceCashierId;
+    const salesParams = workspaceGetParams({ from: fromDate, to: toDate });
+    if (
+      cashierForSales &&
+      (isAdmin || isManager) &&
+      typeof cashierForSales === "string"
+    ) {
+      salesParams.cashierId = cashierForSales;
+    }
     const [dashR, salesR, prodR, cliR, payR] = await Promise.allSettled([
       api.get("/api/dashboard", {
         ...fresh,
@@ -193,7 +226,7 @@ function MainWorkspace({ setToken, reportLoading }) {
       }),
       api.get("/api/sales", {
         ...fresh,
-        params: workspaceGetParams({ from: fromDate, to: toDate }),
+        params: salesParams,
       }),
       api.get("/api/products", {
         ...fresh,
@@ -268,7 +301,7 @@ function MainWorkspace({ setToken, reportLoading }) {
     setFetchError(errs.filter(Boolean).join(" · "));
     setInitialSyncDone(true);
     setLoading(false);
-  }, []);
+  }, [workspaceCashierId, isAdmin, isManager]);
 
   useEffect(() => {
     if (initialFetchRef.current) return;
@@ -334,17 +367,40 @@ function MainWorkspace({ setToken, reportLoading }) {
 
   const handleApply = () => fetchAll(from, to);
 
+  const applyReportPreset = (key) => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (key === "today") {
+      setFrom(today);
+      setTo(today);
+      fetchAll(today, today);
+      return;
+    }
+    if (key === "week") {
+      const d = new Date(`${today}T12:00:00`);
+      const dow = (d.getDay() + 6) % 7;
+      d.setDate(d.getDate() - dow);
+      const start = d.toISOString().slice(0, 10);
+      d.setDate(d.getDate() + 6);
+      const end = d.toISOString().slice(0, 10);
+      setFrom(start);
+      setTo(end);
+      fetchAll(start, end);
+    }
+  };
+
   const handleReset = () => {
     if (isCashier) {
       const t = new Date().toISOString().slice(0, 10);
       setFrom(t);
       setTo(t);
-      fetchAll(t, t);
+      setWorkspaceCashierId("");
+      fetchAll(t, t, { cashierId: "" });
       return;
     }
     setFrom("2020-01-01");
     setTo("2030-01-01");
-    fetchAll("2020-01-01", "2030-01-01");
+    setWorkspaceCashierId("");
+    fetchAll("2020-01-01", "2030-01-01", { cashierId: "" });
   };
 
   const handleLogout = () => {
@@ -433,6 +489,13 @@ function MainWorkspace({ setToken, reportLoading }) {
           canCreateSales={canCreateSales}
           canEditSales={canEditSales}
           canVoidSales={canVoidSales}
+          showCashierFilter={isAdmin || isManager}
+          cashiers={saleCashiers}
+          cashierId={workspaceCashierId}
+          onCashierChange={(id) => {
+            setWorkspaceCashierId(id);
+            fetchAll(from, to, { cashierId: id });
+          }}
         />
       ) : null}
 
@@ -497,6 +560,18 @@ function MainWorkspace({ setToken, reportLoading }) {
           from={from}
           to={to}
           canViewFinancialKpis={canViewFinancialKpis}
+          isAdmin={isAdmin}
+          isManager={isManager}
+          onFromChange={setFrom}
+          onToChange={setTo}
+          onApplyDates={() => fetchAll(from, to)}
+          onReportPreset={applyReportPreset}
+          cashierId={workspaceCashierId}
+          onCashierChange={(id) => {
+            setWorkspaceCashierId(id);
+            fetchAll(from, to, { cashierId: id });
+          }}
+          cashiers={saleCashiers}
         />
       ) : null}
 

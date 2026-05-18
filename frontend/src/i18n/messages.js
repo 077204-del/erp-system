@@ -116,6 +116,8 @@ export const messages = {
       voidReasonRequired: "يجب إدخال سبب للإبطال.",
       readOnlyOpsHint:
         "تعديل أو حذف المبيعات يتطلب صلاحيات من المسؤول (تعديل/حذف المبيعات).",
+      filterCashier: "الكاشير",
+      allCashiers: "كل الكاشيرات",
     },
     rbac: {
       readOnlyCatalog: "عرض فقط — تعديل المنتجات للمسؤول فقط.",
@@ -391,6 +393,11 @@ export const messages = {
       fallbackBadge: "تقدير محلي (الخادم غير متاح)",
       fallbackNetHint: "مدفوعات النطاق − مصروفات النطاق (محلي)",
       salesCountSuffix: "عدد المبيعات",
+      presetToday: "اليوم",
+      presetWeek: "هذا الأسبوع",
+      cashierFilter: "الكاشير",
+      allCashiers: "كل الكاشيرات",
+      applyDates: "تطبيق التواريخ",
     },
     dashboard: {
       period: "فترة التقرير",
@@ -631,6 +638,8 @@ export const messages = {
       voidReasonRequired: "Un motif est obligatoire.",
       readOnlyOpsHint:
         "Modifier ou supprimer une vente nécessite les droits « ventes » accordés par un administrateur.",
+      filterCashier: "Caissier",
+      allCashiers: "Tous les caissiers",
     },
     rbac: {
       readOnlyCatalog: "Lecture seule — modification des produits : admin.",
@@ -909,6 +918,11 @@ export const messages = {
       fallbackBadge: "Estimation locale (serveur indispo.)",
       fallbackNetHint: "Paiements période − dépenses période (local)",
       salesCountSuffix: "nb ventes",
+      presetToday: "Aujourd'hui",
+      presetWeek: "Cette semaine",
+      cashierFilter: "Caissier",
+      allCashiers: "Tous les caissiers",
+      applyDates: "Appliquer les dates",
     },
     dashboard: {
       period: "Période",
@@ -1149,6 +1163,8 @@ export const messages = {
       voidReasonRequired: "A reason is required to void a sale.",
       readOnlyOpsHint:
         "Editing or deleting a sale requires administrator-granted sales permissions.",
+      filterCashier: "Cashier",
+      allCashiers: "All cashiers",
     },
     rbac: {
       readOnlyCatalog: "View only — product changes are admin-only.",
@@ -1429,6 +1445,11 @@ export const messages = {
       fallbackBadge: "Local estimate (server unavailable)",
       fallbackNetHint: "Range payments − range expenses (local)",
       salesCountSuffix: "sales count",
+      presetToday: "Today",
+      presetWeek: "This week",
+      cashierFilter: "Cashier",
+      allCashiers: "All cashiers",
+      applyDates: "Apply dates",
     },
     dashboard: {
       period: "Reporting period",

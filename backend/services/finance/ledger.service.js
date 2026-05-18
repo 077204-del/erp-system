@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Sale = require("../../models/sale.model");
 const Payment = require("../../models/payment.model");
 const Client = require("../../models/client.model");
@@ -33,8 +34,15 @@ function matchSalesNotVoided() {
   return { voided: { $ne: true } };
 }
 
-function buildSalesFilter(range) {
+function buildSalesFilter(range, cashierId) {
   const base = matchSalesNotVoided();
+  if (
+    cashierId != null &&
+    String(cashierId).trim() &&
+    mongoose.Types.ObjectId.isValid(String(cashierId).trim())
+  ) {
+    base.cashierId = new mongoose.Types.ObjectId(String(cashierId).trim());
+  }
   if (!range) return base;
   return {
     ...base,
@@ -67,14 +75,96 @@ async function fetchPaymentsInDashboardRange(range) {
 }
 
 /**
+ * Payments in range tied to sales recorded by a given cashier (sale.cashierId).
+ * Omits payments with no saleId or voided / mismatched sale.
+ */
+async function fetchPaymentsInDashboardRangeForCashier(range, cashierOid) {
+  const oid =
+    cashierOid instanceof mongoose.Types.ObjectId
+      ? cashierOid
+      : new mongoose.Types.ObjectId(String(cashierOid));
+
+  if (!range) {
+    return Payment.aggregate([
+      {
+        $lookup: {
+          from: "sales",
+          localField: "saleId",
+          foreignField: "_id",
+          as: "_sale",
+        },
+      },
+      {
+        $match: {
+          "_sale.0": { $exists: true },
+          "_sale.0.voided": { $ne: true },
+          "_sale.0.cashierId": oid,
+        },
+      },
+      { $project: { _sale: 0 } },
+    ]);
+  }
+
+  return Payment.aggregate([
+    {
+      $addFields: {
+        _eff: { $ifNull: ["$recordedAt", "$createdAt"] },
+      },
+    },
+    {
+      $match: {
+        _eff: { $gte: range.start, $lte: range.end },
+      },
+    },
+    {
+      $lookup: {
+        from: "sales",
+        localField: "saleId",
+        foreignField: "_id",
+        as: "_sale",
+      },
+    },
+    {
+      $match: {
+        "_sale.0": { $exists: true },
+        "_sale.0.voided": { $ne: true },
+        "_sale.0.cashierId": oid,
+      },
+    },
+    { $project: { _sale: 0 } },
+  ]);
+}
+
+/** Sum Payment.amount per saleId (all time) — reconciles legacy Sale.paidAmount vs Payment rows. */
+async function fetchPaymentTotalsBySaleIds(saleIds) {
+  const ids = (saleIds || []).filter((id) => id != null);
+  if (!ids.length) return new Map();
+  const rows = await Payment.aggregate([
+    { $match: { saleId: { $in: ids } } },
+    {
+      $group: {
+        _id: "$saleId",
+        t: { $sum: { $ifNull: ["$amount", 0] } },
+      },
+    },
+  ]);
+  const m = new Map();
+  for (const row of rows) {
+    if (row && row._id) m.set(String(row._id), toNumber(row.t));
+  }
+  return m;
+}
+
+/**
  * Dashboard / closing financial definitions (read-only, centralized here):
  *
  * - stats.revenue (accrual): sum of Sale.total — invoice face value in range, NOT cash collected.
  *   Do not add Sale.paidAmount to Payment totals; paidAmount mirrors payments but cash metrics
  *   must use Payment.amount only to stay deterministic.
  *
- * - cash.totalCashIn (cash): sum of Payment.amount — sole source of “money in” for the period.
- *   revenue !== cashIn; mixing them double-counts economically if interpreted as one pool.
+ * - cash.totalCashIn (cash): sum of Payment.amount — primary “money in” for the period.
+ *   Plus a small reconciliation term when Sale.paidAmount exceeds summed Payment rows for the
+ *   same sale (legacy rows) so partial down-payments still count as cash.
  *
  * - cash.cashSales: subset of payments where type === SALE_PAYMENT (tied to a sale line).
  * - cash.debtPayments: subset where type === DIRECT_PAYMENT (standalone debt reduction, not
@@ -85,14 +175,27 @@ async function fetchPaymentsInDashboardRange(range) {
  */
 /**
  * Raw ledger reads for financialEngine (no financial formulas here).
+ * @param {string} from
+ * @param {string} to
+ * @param {{ cashierId?: string }} [options]
  */
-async function fetchPeriodLedgerData(from, to) {
+async function fetchPeriodLedgerData(from, to, options = {}) {
   const range = getDateRange(from, to);
+  const cashierRaw =
+    options && options.cashierId != null ? String(options.cashierId).trim() : "";
+  const cashierOid =
+    cashierRaw && mongoose.Types.ObjectId.isValid(cashierRaw)
+      ? new mongoose.Types.ObjectId(cashierRaw)
+      : null;
+
   const [sales, payments] = await Promise.all([
-    Sale.find(buildSalesFilter(range))
+    Sale.find(buildSalesFilter(range, cashierRaw || undefined))
       .populate("productId", "costPrice")
+      .populate("cashierId", "username role")
       .lean(),
-    fetchPaymentsInDashboardRange(range),
+    cashierOid
+      ? fetchPaymentsInDashboardRangeForCashier(range, cashierOid)
+      : fetchPaymentsInDashboardRange(range),
   ]);
   return {
     range: { from, to },
@@ -200,9 +303,21 @@ async function getClientBalance(clientId, options = {}) {
   return result;
 }
 
-async function getSalesList(from, to) {
+/**
+ * @param {string} from
+ * @param {string} to
+ * @param {{ cashierId?: string }} [options]
+ */
+async function getSalesList(from, to, options = {}) {
   const range = getDateRange(from, to);
-  const filter = buildSalesFilter(range);
+  const cashierRaw =
+    options && options.cashierId != null ? String(options.cashierId).trim() : "";
+  const filter = buildSalesFilter(
+    range,
+    cashierRaw && mongoose.Types.ObjectId.isValid(cashierRaw)
+      ? cashierRaw
+      : undefined
+  );
 
   return Sale.find(filter)
     .populate(
@@ -210,6 +325,7 @@ async function getSalesList(from, to) {
       "name salePrice qty barcode category lowStockThreshold"
     )
     .populate("clientId")
+    .populate("cashierId", "username role")
     .sort({ createdAt: -1 });
 }
 
@@ -355,6 +471,7 @@ async function getInventoryCapital() {
 
 module.exports = {
   fetchPeriodLedgerData,
+  fetchPaymentTotalsBySaleIds,
   getDashboardStats,
   getClosingStats,
   getDailyClosingStats,

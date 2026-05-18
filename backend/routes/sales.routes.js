@@ -10,6 +10,11 @@ router.post(
   controller.createSale
 );
 router.get("/", auth(["admin", "manager", "cashier"]), controller.getSales);
+router.get(
+  "/cashiers/list",
+  auth(["admin", "manager"]),
+  controller.listSaleCashiers
+);
 router.patch(
   "/:id",
   auth(["admin", "manager", "cashier", "canEditSales"]),

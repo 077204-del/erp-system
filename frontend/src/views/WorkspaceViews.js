@@ -305,6 +305,10 @@ export function SalesView({
   canCreateSales = true,
   canEditSales = false,
   canVoidSales = false,
+  showCashierFilter = false,
+  cashiers = [],
+  cashierId = "",
+  onCashierChange,
 }) {
   const { t } = useLocale();
   const { toast, confirm } = useErpUi();
@@ -325,6 +329,27 @@ export function SalesView({
           "—"
         ),
     },
+    ...(showCashierFilter
+      ? [
+          {
+            key: "cashier",
+            header: t("saleFlow.filterCashier"),
+            searchAccessor: (r) =>
+              r.cashierId && typeof r.cashierId === "object" && r.cashierId.username
+                ? String(r.cashierId.username)
+                : "",
+            render: (r) =>
+              safeText(
+                r.cashierId &&
+                  typeof r.cashierId === "object" &&
+                  r.cashierId.username != null
+                  ? r.cashierId.username
+                  : "",
+                "—"
+              ),
+          },
+        ]
+      : []),
     { key: "quantity", header: "Qty", numeric: true },
     { key: "status", header: "Status", render: (r) => safeText(r.status, "—") },
     { key: "debt", header: "Debt", numeric: true, currency: true },
@@ -438,6 +463,33 @@ export function SalesView({
         <p className="erp-card-hint erp-sales-perm-hint" role="note">
           {t("saleFlow.readOnlyOpsHint")}
         </p>
+      ) : null}
+      {showCashierFilter ? (
+        <div
+          className="erp-filter erp-filter--inline"
+          style={{ marginBottom: "0.65rem" }}
+        >
+          <div className="erp-field" style={{ minWidth: "12rem" }}>
+            <label htmlFor="sales-cashier-filter">
+              {t("saleFlow.filterCashier")}
+            </label>
+            <select
+              id="sales-cashier-filter"
+              value={cashierId || ""}
+              onChange={(e) =>
+                typeof onCashierChange === "function" &&
+                onCashierChange(e.target.value)
+              }
+            >
+              <option value="">{t("saleFlow.allCashiers")}</option>
+              {(Array.isArray(cashiers) ? cashiers : []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {safeText(c.username, c.id)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       ) : null}
       <ErpDataTable
         columns={columns}
@@ -607,7 +659,7 @@ export function ProductsView({
         </p>
       ) : null}
       {canManageProducts ? (
-        <div className="erp-btn-row" style={{ marginBottom: "1rem" }}>
+        <div className="erp-btn-row" style={{ marginBottom: "0.55rem" }}>
           <button
             type="button"
             className="erp-btn erp-btn-primary"
@@ -625,9 +677,10 @@ export function ProductsView({
         columns={columns}
         rows={products}
         getRowId={(r) => String(r?._id ?? "")}
-        pageSize={12}
+        pageSize={20}
         loading={loading}
         showSkeleton={!initialSyncDone}
+        density="dense"
         emptyTitle={t("productForm.emptyTitle")}
         emptyHint={
           canManageProducts
