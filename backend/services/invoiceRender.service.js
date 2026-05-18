@@ -221,6 +221,16 @@ const TH_LABELS = {
   st: "الحالة",
 };
 
+/** DD/MM/YYYY for thermal header only (display). */
+function formatThermalDateDmy(sale) {
+  const d = new Date(sale.createdAt || sale.saleDate || Date.now());
+  if (Number.isNaN(d.getTime())) return "—";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = String(d.getFullYear());
+  return `${dd}/${mm}/${yyyy}`;
+}
+
 /**
  * Compact thermal-friendly HTML (browser print). RTL + Cairo/Tajawal; numbers LTR.
  * @param {object} sale — populated sale from getSaleById
@@ -228,11 +238,9 @@ const TH_LABELS = {
 function renderThermalInvoiceHtml(sale) {
   const ctx = buildInvoiceContext(sale);
   const esc = escapeHtml;
+  const dateDmy = esc(formatThermalDateDmy(sale));
 
   const rows = [
-    `<tr><td colspan="2" class="th-cell th-title">${esc(TH_LABELS.inv)}</td></tr>`,
-    `<tr><td class="th-muted">${esc("المرجع")}</td><td class="th-num"><span class="ltr">${esc(ctx.invoiceNo)}</span></td></tr>`,
-    `<tr><td class="th-muted">${esc("التاريخ")}</td><td class="th-num ltr">${esc(ctx.generatedAt)}</td></tr>`,
     `<tr><td colspan="2" class="th-gap"></td></tr>`,
     `<tr><td colspan="2" class="th-section">${esc("العميل")}</td></tr>`,
     `<tr><td colspan="2" class="th-wrap">${esc(ctx.clientName)}</td></tr>`,
@@ -249,11 +257,25 @@ function renderThermalInvoiceHtml(sale) {
   const body = `
 <div class="page">
   <div class="receipt" role="document">
-    <div class="receipt__brand">${esc(ctx.companyName)}</div>
+    <div class="receipt__logo" aria-hidden="true"></div>
+    <div class="receipt__brand">Eco Meuble</div>
+    <div class="receipt__tagline">الأثاث والتأثيث</div>
+    <div class="receipt__rule"></div>
+    <div class="receipt__meta">
+      <div class="receipt__meta-line ltr">Invoice: #<span class="receipt__invid">${esc(ctx.invoiceNo)}</span></div>
+      <div class="receipt__meta-line ltr">Date: ${dateDmy}</div>
+    </div>
     <div class="receipt__rule"></div>
     <table class="receipt__table" cellpadding="0" cellspacing="0">${rows}</table>
     <div class="receipt__rule"></div>
     <p class="receipt__thanks">${esc(TH_LABELS.thanks)}</p>
+    <div class="receipt__rule receipt__rule--heavy"></div>
+    <div class="receipt__footer">
+      <div class="receipt__footer-line">Phone:</div>
+      <div class="receipt__footer-line ltr">0771266804</div>
+      <div class="receipt__footer-line ltr">0771890642</div>
+    </div>
+    <div class="receipt__qr" aria-hidden="true"></div>
   </div>
 </div>`;
 
@@ -273,30 +295,66 @@ function renderThermalInvoiceHtml(sale) {
   }
   .receipt {
     width: 100%;
-    max-width: 80mm;
+    max-width: min(80mm, 100%);
     margin: 0 auto;
     background: #fff;
     color: #0f2242;
     border: 1px solid #c5ced9;
     border-radius: 10px;
-    padding: 14px 16px 16px;
+    padding: 12px 14px 14px;
     box-shadow: 0 6px 22px rgba(15, 34, 66, 0.1);
     font-family: Cairo, Tajawal, Arial, sans-serif;
     font-size: 13px;
     line-height: 1.45;
   }
+  .receipt__logo {
+    min-height: 28px;
+    margin: 0 auto 10px;
+    max-width: 72mm;
+    border: 1px dashed #b8c4d6;
+    border-radius: 6px;
+    background: #fafbfd;
+  }
   .receipt__brand {
     font-weight: 700;
-    font-size: 15px;
+    font-size: 16px;
     text-align: center;
-    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+    margin: 0;
     word-wrap: break-word;
     overflow-wrap: anywhere;
   }
+  .receipt__tagline {
+    font-weight: 600;
+    font-size: 13px;
+    text-align: center;
+    margin: 4px 0 0;
+    color: #1e3a5f;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+  }
+  .receipt__meta {
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.55;
+    padding: 2px 0;
+  }
+  .receipt__meta-line {
+    margin: 2px 0;
+    word-break: break-all;
+  }
+  .receipt__invid { font-weight: 600; }
   .receipt__rule {
     height: 1px;
     background: #dbe4f0;
     margin: 10px 0;
+  }
+  .receipt__rule--heavy {
+    margin-top: 14px;
+    margin-bottom: 10px;
+    height: 2px;
+    background: #0f2242;
+    opacity: 0.2;
   }
   .receipt__table {
     width: 100%;
@@ -304,7 +362,7 @@ function renderThermalInvoiceHtml(sale) {
     table-layout: fixed;
   }
   .receipt__table td {
-    padding: 5px 2px;
+    padding: 6px 2px;
     vertical-align: top;
     border-bottom: 1px solid #eef2f8;
     word-wrap: break-word;
@@ -314,7 +372,7 @@ function renderThermalInvoiceHtml(sale) {
   .th-muted { color: #5a6b85; font-size: 12px; width: 38%; }
   .th-num { text-align: end; }
   .th-wrap { font-weight: 600; }
-  .th-gap td { border: none !important; padding: 4px 0 !important; }
+  .th-gap td { border: none !important; padding: 2px 0 !important; }
   .th-section { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #5a6b85; background: #f4f7fc; }
   .th-strong td { font-weight: 700; font-size: 14px; border-bottom: 2px solid #dbe4f0; }
   .ltr { direction: ltr; unicode-bidi: isolate; }
@@ -324,10 +382,34 @@ function renderThermalInvoiceHtml(sale) {
     font-size: 12px;
     color: #5a6b85;
   }
+  .receipt__footer {
+    text-align: center;
+    font-size: 10px;
+    line-height: 1.55;
+    color: #3d4f66;
+    padding: 0 2px 4px;
+  }
+  .receipt__footer-line { margin: 1px 0; }
+  .receipt__qr {
+    min-height: 52px;
+    margin: 10px auto 0;
+    max-width: 52mm;
+    border: 1px dashed #b8c4d6;
+    border-radius: 6px;
+    background: repeating-linear-gradient(
+      90deg,
+      #f4f7fc,
+      #f4f7fc 2px,
+      #eef2f8 2px,
+      #eef2f8 4px
+    );
+  }
   @media print {
     html, body { background: #fff; }
     .page { padding: 0; display: block; }
-    .receipt { box-shadow: none; border-radius: 0; border: none; max-width: 80mm; margin: 0 auto; }
+    .receipt { box-shadow: none; border-radius: 0; border: none; max-width: 80mm; margin: 0 auto; padding: 8mm 6mm; }
+    .receipt__logo { min-height: 24px; }
+    .receipt__qr { min-height: 48px; }
   }
 </style></head><body>${body}</body></html>`;
 }
