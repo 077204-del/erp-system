@@ -116,12 +116,19 @@ exports.getSales = async (req, res, next) => {
   try {
     const { from, to, cashierId } = req.query;
     const role = normalizeRoleForSalesFilter(req.user && req.user.role);
-    const canFilterByCashier = role === "admin" || role === "manager";
     const rawCid = cashierId != null ? String(cashierId).trim() : "";
-    const listOpts =
-      canFilterByCashier && rawCid && mongoose.Types.ObjectId.isValid(rawCid)
-        ? { cashierId: rawCid }
-        : {};
+    let listOpts = {};
+    if (role === "cashier") {
+      if (req.user && req.user.id) {
+        listOpts = { cashierId: String(req.user.id) };
+      }
+    } else if (
+      role === "admin" &&
+      rawCid &&
+      mongoose.Types.ObjectId.isValid(rawCid)
+    ) {
+      listOpts = { cashierId: rawCid };
+    }
     const sales = await getSalesList(from, to, listOpts);
 
     return res.json(sanitizeSaleList(sales, roleFromReq(req)));
@@ -130,11 +137,11 @@ exports.getSales = async (req, res, next) => {
   }
 };
 
-/** Cashiers for sales/report filters (admin / manager only). */
+/** Cashiers for sales/report filters (admin only — weekly performance visibility). */
 exports.listSaleCashiers = async (req, res) => {
   try {
     const role = normalizeRoleForSalesFilter(req.user && req.user.role);
-    if (role !== "admin" && role !== "manager") {
+    if (role !== "admin") {
       return res.status(403).json({ message: "Forbidden" });
     }
     const rows = await User.find({ role: "cashier" })

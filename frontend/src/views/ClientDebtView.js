@@ -1,13 +1,73 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import api from "../api";
+import { freshGetConfig } from "../config/apiRequest";
 import ErpDataTable from "../components/ErpDataTable";
 import ErpModuleFooter from "../components/ErpModuleFooter";
 import { useLocale } from "../context/LocaleContext";
 import { buildClientDebtRows } from "../utils/erpAggregates";
 import { formatNumber, safeText } from "../utils/erpFormat";
 
+function normalizeDebtSummaryRows(payload) {
+  if (!Array.isArray(payload)) return [];
+  return payload.map((r) => {
+    const lastRaw = r.lastTransactionAt;
+    let lastTransactionAt = null;
+    if (lastRaw) {
+      const d = new Date(lastRaw);
+      if (!Number.isNaN(d.getTime())) lastTransactionAt = d;
+    }
+    return {
+      ...r,
+      _id: r._id != null ? String(r._id) : "",
+      client: r.client || { name: r.name, phone: r.phone },
+      lastTransactionAt,
+    };
+  });
+}
+
 export default function ClientDebtView({ clients, sales, payments }) {
   const { t } = useLocale();
   const [debtFilter, setDebtFilter] = useState("all");
+  const [apiRows, setApiRows] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await api.get("/api/clients/debt-summary", freshGetConfig());
+        if (!cancelled) {
+          setApiRows(normalizeDebtSummaryRows(res.data));
+        }
+      } catch {
+        if (!cancelled) setApiRows(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const fallbackRows = useMemo(
+    () => buildClientDebtRows(clients, sales, payments),
+    [clients, sales, payments]
+  );
+
+  const sourceRows = apiRows != null ? apiRows : fallbackRows;
+
+  const rows = useMemo(() => {
+    const base = sourceRows;
+    if (debtFilter === "high") {
+      return base.filter((r) => r.debt > 500);
+    }
+    if (debtFilter === "none") {
+      return base.filter((r) => r.debt <= 0);
+    }
+    return base;
+  }, [sourceRows, debtFilter]);
 
   const filters = useMemo(
     () => [
@@ -17,17 +77,6 @@ export default function ClientDebtView({ clients, sales, payments }) {
     ],
     [t]
   );
-
-  const rows = useMemo(() => {
-    const base = buildClientDebtRows(clients, sales, payments);
-    if (debtFilter === "high") {
-      return base.filter((r) => r.debt > 500);
-    }
-    if (debtFilter === "none") {
-      return base.filter((r) => r.debt <= 0);
-    }
-    return base;
-  }, [clients, sales, payments, debtFilter]);
 
   const columns = [
     {
@@ -74,9 +123,13 @@ export default function ClientDebtView({ clients, sales, payments }) {
       key: "last",
       header: t("clientDebt.colLast"),
       searchAccessor: (r) =>
-        r.lastTransactionAt ? r.lastTransactionAt.toISOString() : "",
+        r.lastTransactionAt instanceof Date &&
+        !Number.isNaN(r.lastTransactionAt.getTime())
+          ? r.lastTransactionAt.toISOString()
+          : "",
       render: (r) =>
-        r.lastTransactionAt
+        r.lastTransactionAt instanceof Date &&
+        !Number.isNaN(r.lastTransactionAt.getTime())
           ? r.lastTransactionAt.toLocaleString(undefined, {
               dateStyle: "medium",
               timeStyle: "short",
@@ -89,6 +142,11 @@ export default function ClientDebtView({ clients, sales, payments }) {
     <section className="erp-section erp-section-flush-top">
       <h2 className="erp-section-title">{t("clientDebt.title")}</h2>
       <p className="erp-page-lead">{t("clientDebt.lead")}</p>
+      {apiRows == null && !loading ? (
+        <p className="erp-card-hint" role="note">
+          {t("clientDebt.fallbackHint")}
+        </p>
+      ) : null}
       <div className="erp-debt-filters">
         {filters.map((f) => (
           <button
@@ -110,8 +168,8 @@ export default function ClientDebtView({ clients, sales, payments }) {
         rows={rows}
         getRowId={(r) => r._id}
         pageSize={12}
-        loading={false}
-        showSkeleton={false}
+        loading={loading}
+        showSkeleton={loading}
         emptyTitle={t("clientDebt.emptyTitle")}
         emptyHint={t("clientDebt.emptyHint")}
         searchPlaceholder={t("clientDebt.searchPh")}

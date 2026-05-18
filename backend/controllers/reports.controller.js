@@ -58,20 +58,18 @@ exports.getReports = async (req, res) => {
     let t = safeString(to, "") || f;
 
     const role = normalizeRole(req.user && req.user.role ? req.user.role : "");
-    if (role === "cashier" && (f !== today || t !== today)) {
-      return res.status(403).json({
-        message:
-          "Cashiers may only run reports for the current business day.",
-        allowedRange: { from: today, to: today },
-      });
-    }
-
-    const canFilterByCashier = role === "admin" || role === "manager";
+    const canFilterByCashier = role === "admin";
     const rawCid = cashierId != null ? String(cashierId).trim() : "";
-    const listOpts =
-      canFilterByCashier && rawCid && mongoose.Types.ObjectId.isValid(rawCid)
-        ? { cashierId: rawCid }
-        : {};
+    let listOpts = {};
+    if (role === "cashier" && req.user && req.user.id) {
+      listOpts = { cashierId: String(req.user.id) };
+    } else if (
+      canFilterByCashier &&
+      rawCid &&
+      mongoose.Types.ObjectId.isValid(rawCid)
+    ) {
+      listOpts = { cashierId: rawCid };
+    }
 
     const sales = await getSalesList(f, t, listOpts);
 
@@ -131,15 +129,18 @@ exports.getReports = async (req, res) => {
         revenue: toNumber(x.revenue),
       }));
 
+    const reportCashierId =
+      listOpts && listOpts.cashierId ? String(listOpts.cashierId) : "";
+
     const body = await financialEngine.buildReports(f, t, roleFromReq(req), {
       topProducts,
       topClients,
       cashVsCredit: cashVsCreditFromSalesList(sales),
-      cashierId: listOpts.cashierId,
+      cashierId: reportCashierId || undefined,
     });
 
     let cashiers = [];
-    if (role === "admin" || role === "manager") {
+    if (role === "admin") {
       const rows = await User.find({ role: "cashier" })
         .select("username")
         .sort({ username: 1 })

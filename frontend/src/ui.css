@@ -1126,6 +1126,35 @@
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
 }
 
+/* Native <select> (incl. Capacitor / Android): enforce readable surfaces */
+select,
+.erp-filter select,
+.erp-page-toolbar select,
+.erp-reports-toolbar select {
+  color-scheme: light;
+  background-color: var(--erp-surface, #ffffff) !important;
+  color: var(--erp-text, #0f172a) !important;
+}
+
+select option {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+[data-erp-theme="dark"] select,
+[data-erp-theme="dark"] .erp-filter select,
+[data-erp-theme="dark"] .erp-page-toolbar select,
+[data-erp-theme="dark"] .erp-reports-toolbar select {
+  color-scheme: dark;
+  background-color: var(--erp-surface-2, #1e293b) !important;
+  color: var(--erp-text, #f1f5f9) !important;
+}
+
+[data-erp-theme="dark"] select option {
+  background-color: #1e293b;
+  color: #f1f5f9;
+}
+
 /* ========== Badges ========== */
 .erp-badge {
   display: inline-flex;
@@ -2699,10 +2728,25 @@
 
 .erp-table-system--pro .erp-table td {
   border-bottom: 1px solid #e8edf3;
+  border-right: 1px solid var(--erp-border, #e2e8f0);
+}
+
+.erp-table-system--pro .erp-table th {
+  border-right: 1px solid var(--erp-border, #e2e8f0);
+}
+
+.erp-table-system--pro .erp-table th:last-child,
+.erp-table-system--pro .erp-table td:last-child {
+  border-right: none;
 }
 
 .erp-table-system--pro .erp-table tbody tr:last-child td {
-  border-bottom: none;
+  border-bottom: 1px solid var(--erp-border-strong, #c5d0de);
+}
+
+.erp-table-system--pro .erp-table th,
+.erp-table-system--pro .erp-table td {
+  padding: 0.78rem 0.95rem;
 }
 
 /* Dense ERP tables (e.g. products catalog) */

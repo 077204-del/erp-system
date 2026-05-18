@@ -51,10 +51,12 @@ export function DashboardView({
   onToChange,
   onApply,
   onReset,
+  onPreset,
   dashboardMeta = {},
   canViewFinancial = false,
   isAdmin = false,
   isCashier = false,
+  cashierWeeklyBreakdown = null,
 }) {
   const metaRole = dashboardMeta?.role;
   const showFinancial =
@@ -119,6 +121,26 @@ export function DashboardView({
             />
           </div>
           <div className="erp-btn-row">
+            <button
+              type="button"
+              className="erp-btn erp-btn-ghost erp-btn-sm"
+              onClick={() =>
+                typeof onPreset === "function" && onPreset("today")
+              }
+              disabled={loading}
+            >
+              {t("dashboard.presetToday")}
+            </button>
+            <button
+              type="button"
+              className="erp-btn erp-btn-ghost erp-btn-sm"
+              onClick={() =>
+                typeof onPreset === "function" && onPreset("week")
+              }
+              disabled={loading}
+            >
+              {t("dashboard.presetWeek")}
+            </button>
             <button
               type="button"
               className="erp-btn erp-btn-primary"
@@ -225,6 +247,74 @@ export function DashboardView({
         </div>
       </section>
 
+      {isAdmin && cashierWeeklyBreakdown != null ? (
+        <section
+          className="erp-section erp-section-tight-top"
+          aria-label={t("dashboard.cashierPerfTitle")}
+        >
+          <h2 className="erp-section-title">{t("dashboard.cashierPerfTitle")}</h2>
+          <p className="erp-page-lead" style={{ marginTop: 0 }}>
+            {t("dashboard.cashierPerfLead")}
+          </p>
+          <ErpDataTable
+            columns={[
+              {
+                key: "username",
+                header: t("dashboard.colCashier"),
+                searchAccessor: (r) => r.username,
+                render: (r) => safeText(r.username, "—"),
+              },
+              {
+                key: "salesCount",
+                header: t("dashboard.colSalesCount"),
+                numeric: true,
+                render: (r) => (
+                  <span className="erp-num">{formatNumber(r.salesCount)}</span>
+                ),
+              },
+              {
+                key: "revenue",
+                header: t("dashboard.colRevenue"),
+                numeric: true,
+                render: (r) => (
+                  <span className="erp-num">{formatMoneyDZD(r.revenue)}</span>
+                ),
+              },
+              {
+                key: "linesDebt",
+                header: t("dashboard.colLineDebt"),
+                numeric: true,
+                render: (r) => (
+                  <span className="erp-num">{formatMoneyDZD(r.linesDebt)}</span>
+                ),
+              },
+              {
+                key: "paymentsTotal",
+                header: t("dashboard.colPayments"),
+                numeric: true,
+                render: (r) => (
+                  <span className="erp-num">
+                    {formatMoneyDZD(r.paymentsTotal)}
+                  </span>
+                ),
+              },
+            ]}
+            rows={cashierWeeklyBreakdown}
+            getRowId={(r) =>
+              String(
+                r.cashierId != null ? r.cashierId : `n:${safeText(r.username, "")}`
+              )
+            }
+            pageSize={10}
+            loading={loading}
+            showSkeleton={loading && !initialSyncDone}
+            emptyTitle={t("dashboard.cashierPerfEmpty")}
+            emptyHint={t("dashboard.cashierPerfEmptyHint")}
+            searchPlaceholder={t("dashboard.cashierPerfSearch")}
+          />
+        </section>
+      ) : null}
+
       <section className="erp-section erp-section-tight-top">
         <div className="erp-two-col">
           {showFinancial ? (
@@ -309,6 +399,12 @@ export function SalesView({
   cashiers = [],
   cashierId = "",
   onCashierChange,
+  from = "",
+  to = "",
+  onFromChange,
+  onToChange,
+  onApplySalesRange,
+  onSalesPreset,
 }) {
   const { t } = useLocale();
   const { toast, confirm } = useErpUi();
@@ -454,6 +550,70 @@ export function SalesView({
 
   return (
     <section className="erp-section erp-section-flush-top erp-sales-module erp-sales-view-shell">
+      {typeof onApplySalesRange === "function" ? (
+        <section
+          className="erp-page-toolbar"
+          aria-label={t("dashboard.period")}
+          style={{ marginBottom: "0.65rem" }}
+        >
+          <div className="erp-filter erp-filter--inline">
+            <div className="erp-field">
+              <label htmlFor="sales-from">{t("dashboard.from")}</label>
+              <input
+                id="sales-from"
+                type="date"
+                value={from}
+                onChange={(e) =>
+                  typeof onFromChange === "function" &&
+                  onFromChange(e.target.value)
+                }
+              />
+            </div>
+            <div className="erp-field">
+              <label htmlFor="sales-to">{t("dashboard.to")}</label>
+              <input
+                id="sales-to"
+                type="date"
+                value={to}
+                onChange={(e) =>
+                  typeof onToChange === "function" &&
+                  onToChange(e.target.value)
+                }
+              />
+            </div>
+          </div>
+          <div className="erp-btn-row">
+            <button
+              type="button"
+              className="erp-btn erp-btn-ghost erp-btn-sm"
+              onClick={() =>
+                typeof onSalesPreset === "function" && onSalesPreset("today")
+              }
+              disabled={loading}
+            >
+              {t("dashboard.presetToday")}
+            </button>
+            <button
+              type="button"
+              className="erp-btn erp-btn-ghost erp-btn-sm"
+              onClick={() =>
+                typeof onSalesPreset === "function" && onSalesPreset("week")
+              }
+              disabled={loading}
+            >
+              {t("dashboard.presetWeek")}
+            </button>
+            <button
+              type="button"
+              className="erp-btn erp-btn-primary erp-btn-sm"
+              onClick={onApplySalesRange}
+              disabled={loading}
+            >
+              {t("reports.applyDates")}
+            </button>
+          </div>
+        </section>
+      ) : null}
       {canCreateSales ? fab : (
         <p className="erp-page-lead erp-rbac-banner" role="note">
           {t("rbac.noCreateSales")}

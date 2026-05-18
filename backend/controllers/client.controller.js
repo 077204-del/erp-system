@@ -3,6 +3,7 @@ const {
   getClientById,
   getClientsSorted,
   getClientDebtLedger,
+  getClientsDebtSummaryTable,
 } = require("../services/finance/ledger.service");
 const {
   writeCreateClient,
@@ -72,6 +73,31 @@ exports.getClients = async (req, res) => {
   try {
     const clients = await getClientsSorted();
     res.json(clients);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+/** All-time per-client debt rollups (not scoped by workspace dates). */
+exports.getClientsDebtSummary = async (req, res) => {
+  try {
+    const rows = await getClientsDebtSummaryTable();
+    res.json(
+      rows.map((r) => ({
+        _id: String(r._id),
+        client: r.client,
+        name: r.name,
+        phone: r.phone,
+        totalSalesAmt: r.totalSalesAmt,
+        totalPaid: r.totalPaid,
+        debt: r.debt,
+        lastTransactionAt:
+          r.lastTransactionAt instanceof Date &&
+          !Number.isNaN(r.lastTransactionAt.getTime())
+            ? r.lastTransactionAt.toISOString()
+            : null,
+      }))
+    );
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

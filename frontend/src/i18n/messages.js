@@ -308,7 +308,9 @@ export const messages = {
     },
     clientDebt: {
       title: "ديون العملاء",
-      lead: "من العملاء والمبيعات والمدفوعات المحمّلة. أرصدة من الحقول والتحقق البسيط.",
+      lead: "أرصدة شاملة من ملخص الديون (كامل السجل، بغض النظر عن نطاق التاريخ في لوحة التحكم).",
+      fallbackHint:
+        "تعذر تحميل الملخص — يُعرض الرصيد من بيانات النطاق الحالي فقط.",
       filterAll: "كل العملاء",
       filterHigh: "دين مرتفع",
       filterNone: "بلا دين",
@@ -364,8 +366,8 @@ export const messages = {
       title: "التقارير والإحصاءات",
       lead:
         "تحليلات الفترة. القوائم من الخادم عند التوفر؛ الرسوم البيانية من البيانات المحلية.",
-      cashierDailyOnly:
-        "حساب الكاشير يقتصر على بيانات اليوم في هذه الشاشة (يُتجاهل نطاق التاريخ في لوحة التحكم).",
+      rangeHint:
+        "اختر الفترة ثم «تطبيق التواريخ» لتحديث المبيعات والرسوم وتقرير الخادم.",
       unavailable: "تقرير الخادم غير متاح — عرض تجميعات محلية.",
       expDaily: "مصروفات يومية",
       expMonthly: "مصروفات شهرية",
@@ -441,6 +443,19 @@ export const messages = {
       realProfit: "الربح الصافي",
       realProfitHint: "الربح الإجمالي − المصروفات",
       totalCashInHint: "النقد الوارد من المبيعات والمدفوعات — دون خصم المصروفات",
+      presetToday: "اليوم",
+      presetWeek: "هذا الأسبوع",
+      cashierPerfTitle: "أداء الكاشير (الفترة المحددة)",
+      cashierPerfLead:
+        "إجمالي المبيعات وعددها ومدفوعات المبيعات المرتبطة بنفس الفترة — للمسؤول فقط.",
+      colCashier: "الكاشير",
+      colSalesCount: "عدد المبيعات",
+      colRevenue: "إيرادات",
+      colLineDebt: "دين على الفواتير",
+      colPayments: "مدفوعات (على مبيعات)",
+      cashierPerfEmpty: "لا بيانات كاشير لهذه الفترة",
+      cashierPerfEmptyHint: "جرّب توسيع نطاق التاريخ أو «تحديث البيانات».",
+      cashierPerfSearch: "بحث في الكاشير…",
     },
     productForm: {
       title: "المنتج",
@@ -833,7 +848,9 @@ export const messages = {
     clientDebt: {
       title: "Dettes clients",
       lead:
-        "À partir des clients, ventes et paiements chargés. Soldes selon l’API et contrôles simples.",
+        "Soldes toutes périodes via le récap dettes (hors plage du tableau de bord).",
+      fallbackHint:
+        "Récap indisponible — affichage basé sur la plage workspace actuelle seulement.",
       filterAll: "Tous",
       filterHigh: "Dette élevée",
       filterNone: "Sans dette",
@@ -889,8 +906,8 @@ export const messages = {
       title: "Rapports",
       lead:
         "Analyses sur la période. Listes serveur si dispo.; graphiques locaux sinon.",
-      cashierDailyOnly:
-        "Les comptes caissier sont limités aux données du jour sur cet écran (la plage du tableau de bord est ignorée).",
+      rangeHint:
+        "Choisissez la période puis « Appliquer les dates » pour rafraîchir ventes, graphiques et rapport serveur.",
       unavailable: "Rapport serveur indisponible — cumuls locaux.",
       expDaily: "Dépenses quotidiennes",
       expMonthly: "Dépenses mensuelles",
@@ -966,6 +983,19 @@ export const messages = {
       realProfit: "Profit réel",
       realProfitHint: "Marge brute − dépenses",
       totalCashInHint: "Encaissements — sans déduction des dépenses",
+      presetToday: "Aujourd'hui",
+      presetWeek: "Cette semaine",
+      cashierPerfTitle: "Performance caissiers (période)",
+      cashierPerfLead:
+        "Totaux ventes, volumes, encaissements liés aux ventes — admin uniquement.",
+      colCashier: "Caissier",
+      colSalesCount: "Nb ventes",
+      colRevenue: "Chiffre d’affaires",
+      colLineDebt: "Dette sur lignes",
+      colPayments: "Paiements (sur ventes)",
+      cashierPerfEmpty: "Aucune donnée caissier pour cette période",
+      cashierPerfEmptyHint: "Élargissez les dates ou actualisez les données.",
+      cashierPerfSearch: "Rechercher un caissier…",
     },
     productForm: {
       title: "Produit",
@@ -1358,7 +1388,9 @@ export const messages = {
     clientDebt: {
       title: "Client debt",
       lead:
-        "From loaded clients, sales, and payments. Balances from API fields and simple checks.",
+        "All-time balances from the debt summary (full history, independent of the workspace date range).",
+      fallbackHint:
+        "Debt summary unavailable — showing balances from the current workspace load only.",
       filterAll: "All clients",
       filterHigh: "High debt",
       filterNone: "No debt",
@@ -1416,8 +1448,8 @@ export const messages = {
       title: "Reports",
       lead:
         "Period analytics. Server lists when available; charts from loaded rows.",
-      cashierDailyOnly:
-        "Cashier accounts are limited to today’s data on this screen (workspace range is ignored).",
+      rangeHint:
+        "Pick the period, then Apply dates to refresh sales, charts, and the server report.",
       unavailable: "Server report unavailable — showing local rollups.",
       expDaily: "Expenses (daily)",
       expMonthly: "Expenses (monthly)",
@@ -1493,6 +1525,19 @@ export const messages = {
       realProfit: "Net profit",
       realProfitHint: "Gross profit − expenses",
       totalCashInHint: "Cash collected in period — expenses not deducted from this",
+      presetToday: "Today",
+      presetWeek: "This week",
+      cashierPerfTitle: "Cashier performance (selected range)",
+      cashierPerfLead:
+        "Per-cashier revenue, sale counts, invoice-line debt snapshot, and sale-linked payments in range — admin only.",
+      colCashier: "Cashier",
+      colSalesCount: "Sales count",
+      colRevenue: "Revenue",
+      colLineDebt: "Line debt (invoices)",
+      colPayments: "Payments (on sales)",
+      cashierPerfEmpty: "No cashier data for this range",
+      cashierPerfEmptyHint: "Try a wider date range or refresh data.",
+      cashierPerfSearch: "Search cashiers…",
     },
     productForm: {
       title: "Product",

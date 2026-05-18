@@ -222,6 +222,10 @@ function privilegedDashboardResponse(payload, role) {
   const debt = pickDebt(p);
   if (debt !== undefined) out.debt = debt;
 
+  if (isAdmin(r) && Array.isArray(p.cashierWeeklyBreakdown)) {
+    out.cashierWeeklyBreakdown = p.cashierWeeklyBreakdown;
+  }
+
   if (isAdmin(r) && raw.inventoryCapital != null) {
     out.inventoryCapital = raw.inventoryCapital;
   } else if (isAdmin(r) && p.inventoryCapital != null) {
@@ -240,7 +244,7 @@ function sanitizeDashboardResponse(payload, role) {
 
   if (isCashier(r)) {
     const out = {
-      meta: { role: "cashier" },
+      meta: { role: "cashier", range: p.range || null },
       stats: cashierOperationalStats(p.stats || {}),
     };
     const debt = pickDebt(p);

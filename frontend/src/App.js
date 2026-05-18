@@ -119,6 +119,7 @@ function MainWorkspace({ setToken, reportLoading }) {
     salesCount: 0,
     totalSales: 0,
   });
+  const [cashierWeeklyBreakdown, setCashierWeeklyBreakdown] = useState(null);
   const [dashboardMeta, setDashboardMeta] = useState({ role: "" });
 
   const [cash, setCash] = useState({
@@ -184,7 +185,7 @@ function MainWorkspace({ setToken, reportLoading }) {
   }, []);
 
   useEffect(() => {
-    if (!isAdmin && !isManager) return;
+    if (!isAdmin) return;
     let cancelled = false;
     (async () => {
       try {
@@ -199,7 +200,7 @@ function MainWorkspace({ setToken, reportLoading }) {
     return () => {
       cancelled = true;
     };
-  }, [isAdmin, isManager]);
+  }, [isAdmin]);
 
   const fetchAll = useCallback(async (fromDate, toDate, opts = {}) => {
     setFetchError("");
@@ -214,7 +215,7 @@ function MainWorkspace({ setToken, reportLoading }) {
     const salesParams = workspaceGetParams({ from: fromDate, to: toDate });
     if (
       cashierForSales &&
-      (isAdmin || isManager) &&
+      isAdmin &&
       typeof cashierForSales === "string"
     ) {
       salesParams.cashierId = cashierForSales;
@@ -246,6 +247,7 @@ function MainWorkspace({ setToken, reportLoading }) {
       const mapped = mapDashboardApiToState(dashR.value.data);
       setDashboardMeta(mapped.meta || { role: "" });
       setDashboard(mapped.dashboard);
+      setCashierWeeklyBreakdown(mapped.cashierWeeklyBreakdown ?? null);
       setCash(
         mapped.cash || {
           cashSales: undefined,
@@ -261,6 +263,7 @@ function MainWorkspace({ setToken, reportLoading }) {
         salesCount: 0,
         totalSales: 0,
       });
+      setCashierWeeklyBreakdown(null);
       setCash({});
     }
 
@@ -301,7 +304,7 @@ function MainWorkspace({ setToken, reportLoading }) {
     setFetchError(errs.filter(Boolean).join(" · "));
     setInitialSyncDone(true);
     setLoading(false);
-  }, [workspaceCashierId, isAdmin, isManager]);
+  }, [workspaceCashierId, isAdmin]);
 
   useEffect(() => {
     if (initialFetchRef.current) return;
@@ -471,10 +474,12 @@ function MainWorkspace({ setToken, reportLoading }) {
           onToChange={setTo}
           onApply={handleApply}
           onReset={handleReset}
+          onPreset={applyReportPreset}
           dashboardMeta={dashboardMeta}
           canViewFinancial={canViewFinancialKpis}
           isAdmin={apiRole === "admin"}
           isCashier={apiRole === "cashier"}
+          cashierWeeklyBreakdown={cashierWeeklyBreakdown}
         />
       ) : null}
 
@@ -485,11 +490,17 @@ function MainWorkspace({ setToken, reportLoading }) {
           initialSyncDone={initialSyncDone}
           products={products}
           clients={clients}
+          from={from}
+          to={to}
+          onFromChange={setFrom}
+          onToChange={setTo}
+          onApplySalesRange={() => fetchAll(from, to)}
+          onSalesPreset={applyReportPreset}
           onRefreshWorkspace={() => fetchAll(from, to)}
           canCreateSales={canCreateSales}
           canEditSales={canEditSales}
           canVoidSales={canVoidSales}
-          showCashierFilter={isAdmin || isManager}
+          showCashierFilter={isAdmin}
           cashiers={saleCashiers}
           cashierId={workspaceCashierId}
           onCashierChange={(id) => {
@@ -561,7 +572,6 @@ function MainWorkspace({ setToken, reportLoading }) {
           to={to}
           canViewFinancialKpis={canViewFinancialKpis}
           isAdmin={isAdmin}
-          isManager={isManager}
           onFromChange={setFrom}
           onToChange={setTo}
           onApplyDates={() => fetchAll(from, to)}

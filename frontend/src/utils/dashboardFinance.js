@@ -69,9 +69,22 @@ export function mapDashboardApiToState(data) {
   if (cashSalesVal !== undefined) cashOut.cashSales = cashSalesVal;
   if (debtPaymentsVal !== undefined) cashOut.debtPayments = debtPaymentsVal;
 
-  return {
+  let breakdown;
+  if (role === "admin") {
+    breakdown = Array.isArray(data?.cashierWeeklyBreakdown)
+      ? data.cashierWeeklyBreakdown
+      : [];
+  } else {
+    breakdown = undefined;
+  }
+
+  const out = {
     meta,
     dashboard,
     cash: Object.keys(cashOut).length > 0 ? cashOut : undefined,
   };
+  if (role === "admin") {
+    out.cashierWeeklyBreakdown = breakdown;
+  }
+  return out;
 }

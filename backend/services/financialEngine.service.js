@@ -158,7 +158,7 @@ function legacyStats(core, extras = {}) {
   };
 }
 
-async function buildDashboard(from, to, userRole) {
+async function buildDashboard(from, to, userRole, attach = {}) {
   const role = resolveUserRole(userRole);
   const core = await computeCore(from, to);
   const totalDebt = toNumber(await getTotalOutstandingDebtFromLedger());
@@ -172,30 +172,30 @@ async function buildDashboard(from, to, userRole) {
     }
   }
 
-  return sanitizeDashboardResponse(
-    {
-      range: core.range,
-      stats: legacyStats(core, {
-        totalDebt,
-        inventoryCapital: inventoryCapitalValue,
-      }),
-      financial: {
-        revenue: core.revenue,
-        cost: core.cost,
-        expenses: core.expenses,
-        grossProfit: core.grossProfit,
-        netProfit: core.netProfit,
-      },
-      cash: {
-        totalCashIn: core.cashIn,
-        cashSales: core.cashSales,
-        debtPayments: core.debtPayments,
-      },
-      debt: totalDebt,
+  const payload = {
+    range: core.range,
+    stats: legacyStats(core, {
+      totalDebt,
       inventoryCapital: inventoryCapitalValue,
+    }),
+    financial: {
+      revenue: core.revenue,
+      cost: core.cost,
+      expenses: core.expenses,
+      grossProfit: core.grossProfit,
+      netProfit: core.netProfit,
     },
-    role
-  );
+    cash: {
+      totalCashIn: core.cashIn,
+      cashSales: core.cashSales,
+      debtPayments: core.debtPayments,
+    },
+    debt: totalDebt,
+    inventoryCapital: inventoryCapitalValue,
+    ...(attach && typeof attach === "object" ? attach : {}),
+  };
+
+  return sanitizeDashboardResponse(payload, role);
 }
 
 async function buildDailyRegister(from, to, userRole) {

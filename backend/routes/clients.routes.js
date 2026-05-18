@@ -18,6 +18,12 @@ router.put("/:id", auth(["admin", "manager", "cashier", "canManageClients"]), cl
 // SPECIFIC ROUTES (IMPORTANT ORDER)
 // ======================
 
+router.get(
+  "/debt-summary",
+  auth(["admin", "manager", "cashier"]),
+  clientController.getClientsDebtSummary
+);
+
 // PROFILE (advanced)
 router.get("/:id/profile", auth(["admin", "manager", "cashier"]), profileController.getClientProfile);
 

@@ -1,26 +1,58 @@
 const financialEngine = require("../services/financialEngine.service");
-const { roleFromReq } = require("../services/responseSanitize.service");
+const ledger = require("../services/finance/ledger.service");
+const {
+  roleFromReq,
+  sanitizeDashboardResponse,
+} = require("../services/responseSanitize.service");
 
 function safeString(v, fallback = "") {
   if (v == null) return fallback;
   return String(v);
 }
 
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 exports.getDashboard = async (req, res) => {
   try {
-    let { from, to } = req.query;
+    const { from, to } = req.query;
     const role = roleFromReq(req);
-    if (role === "cashier") {
-      const day = todayISO();
-      from = day;
-      to = day;
+
+    if (role === "cashier" && req.user && req.user.id) {
+      const scopedCore = await financialEngine.computeCore(from, to, {
+        cashierId: String(req.user.id),
+      });
+      const totalDebt = await ledger.getTotalOutstandingDebtFromLedger();
+      const td = Number(totalDebt);
+      const safeDebt = Number.isFinite(td) ? td : 0;
+      const body = sanitizeDashboardResponse(
+        {
+          range: scopedCore.range,
+          stats: {
+            salesCount: scopedCore.salesCount,
+            sales: scopedCore.salesCount,
+            totalSales: scopedCore.revenue,
+            totalDebt: safeDebt,
+          },
+          debt: safeDebt,
+        },
+        role
+      );
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+      res.setHeader("Pragma", "no-cache");
+      return res.status(200).json(body);
     }
 
-    const body = await financialEngine.buildDashboard(from, to, role);
+    let attach = {};
+    if (role === "admin") {
+      try {
+        attach.cashierWeeklyBreakdown = await ledger.aggregateCashierPerformance(
+          from,
+          to
+        );
+      } catch {
+        attach.cashierWeeklyBreakdown = [];
+      }
+    }
+
+    const body = await financialEngine.buildDashboard(from, to, role, attach);
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
     res.setHeader("Pragma", "no-cache");
     return res.status(200).json(body);

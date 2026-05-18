@@ -469,6 +469,169 @@ async function getInventoryCapital() {
   return toNumber(rows[0].total);
 }
 
+/**
+ * All-time per-client debt table (not scoped by workspace dates) — read-only rollups.
+ */
+async function getClientsDebtSummaryTable() {
+  const [saleGroups, payGroups, clients] = await Promise.all([
+    Sale.aggregate([
+      {
+        $match: {
+          voided: { $ne: true },
+          clientId: { $exists: true, $ne: null },
+        },
+      },
+      {
+        $group: {
+          _id: "$clientId",
+          totalSales: { $sum: { $ifNull: ["$total", 0] } },
+          lastSale: { $max: "$saleDate" },
+        },
+      },
+    ]),
+    Payment.aggregate([
+      { $match: { clientId: { $exists: true, $ne: null } } },
+      {
+        $group: {
+          _id: "$clientId",
+          totalPaid: { $sum: { $ifNull: ["$amount", 0] } },
+          lastPay: { $max: { $ifNull: ["$recordedAt", "$createdAt"] } },
+        },
+      },
+    ]),
+    Client.find({ isArchived: { $ne: true } }).select("name phone").lean(),
+  ]);
+
+  const saleMap = new Map(saleGroups.map((g) => [String(g._id), g]));
+  const payMap = new Map(payGroups.map((g) => [String(g._id), g]));
+
+  const clientIds = new Set([
+    ...saleGroups.map((g) => String(g._id)),
+    ...payGroups.map((g) => String(g._id)),
+  ]);
+
+  const rows = [];
+  for (const cid of clientIds) {
+    const c = clients.find((x) => String(x._id) === cid);
+    if (!c) continue;
+    const sg = saleMap.get(cid) || { totalSales: 0, lastSale: null };
+    const pg = payMap.get(cid) || { totalPaid: 0, lastPay: null };
+    const debt = Math.max(0, toNumber(sg.totalSales) - toNumber(pg.totalPaid));
+    let lastTs = null;
+    for (const d of [sg.lastSale, pg.lastPay]) {
+      if (!d) continue;
+      const t = new Date(d).getTime();
+      if (!Number.isNaN(t) && (lastTs == null || t > lastTs)) lastTs = t;
+    }
+    rows.push({
+      _id: cid,
+      client: c,
+      name: c.name,
+      phone: c.phone,
+      totalSalesAmt: toNumber(sg.totalSales),
+      totalPaid: toNumber(pg.totalPaid),
+      debt,
+      lastTransactionAt: lastTs != null ? new Date(lastTs) : null,
+    });
+  }
+  rows.sort((a, b) => b.debt - a.debt);
+  return rows;
+}
+
+/**
+ * Admin analytics: per-cashier totals in a date range (ISO from/to). Read-only rollups.
+ */
+async function aggregateCashierPerformance(from, to) {
+  const range = getDateRange(from, to);
+  if (!range) return [];
+
+  const saleMatch = {
+    voided: { $ne: true },
+    saleDate: { $gte: range.start, $lte: range.end },
+  };
+
+  const bySale = await Sale.aggregate([
+    { $match: saleMatch },
+    {
+      $group: {
+        _id: "$cashierId",
+        revenue: { $sum: { $ifNull: ["$total", 0] } },
+        salesCount: { $sum: 1 },
+        linesDebt: { $sum: { $ifNull: ["$debt", 0] } },
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "_id",
+        foreignField: "_id",
+        as: "_u",
+      },
+    },
+    {
+      $project: {
+        cashierId: "$_id",
+        username: { $arrayElemAt: ["$_u.username", 0] },
+        revenue: 1,
+        salesCount: 1,
+        linesDebt: 1,
+      },
+    },
+  ]);
+
+  const byPay = await Payment.aggregate([
+    {
+      $addFields: {
+        _eff: { $ifNull: ["$recordedAt", "$createdAt"] },
+      },
+    },
+    {
+      $match: {
+        _eff: { $gte: range.start, $lte: range.end },
+      },
+    },
+    {
+      $lookup: {
+        from: "sales",
+        localField: "saleId",
+        foreignField: "_id",
+        as: "_s",
+      },
+    },
+    {
+      $match: {
+        "_s.0": { $exists: true },
+        "_s.0.voided": { $ne: true },
+      },
+    },
+    {
+      $group: {
+        _id: { $arrayElemAt: ["$_s.cashierId", 0] },
+        paymentsTotal: { $sum: { $ifNull: ["$amount", 0] } },
+      },
+    },
+  ]);
+
+  const payBy = new Map(
+    byPay.map((r) => [r._id == null ? "" : String(r._id), toNumber(r.paymentsTotal)])
+  );
+
+  return bySale.map((row) => {
+    const key = row.cashierId == null ? "" : String(row.cashierId);
+    return {
+      cashierId: row.cashierId,
+      username:
+        row.username != null && String(row.username).trim()
+          ? String(row.username).trim()
+          : key ? "—" : "Unassigned",
+      salesCount: toNumber(row.salesCount),
+      revenue: toNumber(row.revenue),
+      linesDebt: toNumber(row.linesDebt),
+      paymentsTotal: payBy.get(key) ?? 0,
+    };
+  });
+}
+
 module.exports = {
   fetchPeriodLedgerData,
   fetchPaymentTotalsBySaleIds,
@@ -488,4 +651,6 @@ module.exports = {
   getProductsSorted,
   getProductById,
   getInventoryCapital,
+  getClientsDebtSummaryTable,
+  aggregateCashierPerformance,
 };
