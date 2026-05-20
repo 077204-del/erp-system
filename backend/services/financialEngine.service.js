@@ -82,6 +82,14 @@ function orderYmdPair(from, to) {
   return { from: to, to: from };
 }
 
+function hostLocalTodayYmd() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 /**
  * Raw period metrics — no role filtering.
  * @param {string} from
@@ -261,31 +269,39 @@ function ledgerOptionsForContext(userRole, userId, filterCashierId) {
 
 function resolveQueryPeriod(userRole, from, to) {
   const role = resolveUserRole(userRole);
-  const f = normalizeYmdInput(from);
-  const t = normalizeYmdInput(to);
 
   let period;
   if (role === "cashier") {
-    if (f && t && f === t) {
-      period = { from: f, to: t };
+    period = resolveCashierFromTo();
+    if (
+      !period ||
+      !isValidYmd(period.from) ||
+      !isValidYmd(period.to)
+    ) {
+      const today = hostLocalTodayYmd();
+      period = { from: today, to: today };
+    }
+  } else {
+    const f = normalizeYmdInput(from);
+    const t = normalizeYmdInput(to);
+    if (f && t) {
+      period = orderYmdPair(f, t);
     } else {
       period = resolveCashierFromTo();
     }
-  } else if (f && t) {
-    period = orderYmdPair(f, t);
-  } else {
-    period = resolveCashierFromTo();
+    if (
+      !period ||
+      !isValidYmd(period.from) ||
+      !isValidYmd(period.to)
+    ) {
+      period = resolveCashierFromTo();
+    }
   }
 
-  if (
-    !period ||
-    !isValidYmd(period.from) ||
-    !isValidYmd(period.to)
-  ) {
-    period = resolveCashierFromTo();
-  }
-
-  const resolved = { from: period.from, to: period.to };
+  const resolved = {
+    from: String(period.from),
+    to: String(period.to),
+  };
   console.log("[resolveQueryPeriod] resolved", resolved);
   return resolved;
 }
