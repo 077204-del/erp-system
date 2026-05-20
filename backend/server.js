@@ -61,6 +61,8 @@ try {
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   };
+  // Express 5 / path-to-regexp: do not use app.options('*') or bare "*"
+  // paths — they throw at boot. cors() on app.use handles preflight.
   app.use(cors(corsOptions));
 
   app.use((req, res, next) => {
