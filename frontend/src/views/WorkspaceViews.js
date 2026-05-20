@@ -127,7 +127,7 @@ export function DashboardView({
               }
               disabled={loading}
             >
-              {t("dashboard.cashierPresetWeek")}
+              {t("dashboard.presetWeek")}
             </button>
           </div>
         </section>
