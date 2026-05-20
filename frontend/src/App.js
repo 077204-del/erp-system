@@ -11,7 +11,6 @@ import { apiErrorMessage } from "./utils/erpFormat";
 import { freshGetConfig, workspaceGetParams } from "./config/apiRequest";
 import { mapDashboardApiToState } from "./utils/dashboardFinance";
 import { normalizeRoleClient } from "./utils/rbacClient";
-import { localCalendarYmd } from "./utils/localCalendarYmd";
 import { purgeApiCachesOnBoot } from "./offline/responseCache";
 import CashClosingView from "./views/CashClosingView";
 import ClientDebtView from "./views/ClientDebtView";
@@ -100,13 +99,19 @@ function initialRangeForRole() {
   try {
     const u = readStoredUserWithJwtSync();
     if (String(u?.role || "").toLowerCase() === "cashier") {
-      const t = localCalendarYmd(new Date());
-      return { from: t, to: t };
+      return { from: "", to: "" };
     }
   } catch {
     /* ignore */
   }
   return { from: "2020-01-01", to: "2030-01-01" };
+}
+
+function workspaceRangeParams(isCashierRole, fromDate, toDate) {
+  if (isCashierRole) {
+    return workspaceGetParams();
+  }
+  return workspaceGetParams({ from: fromDate, to: toDate });
 }
 
 function MainWorkspace({ setToken, reportLoading }) {
@@ -184,6 +189,13 @@ function MainWorkspace({ setToken, reportLoading }) {
   }, []);
 
   useEffect(() => {
+    if (isCashier) {
+      // eslint-disable-next-line no-console
+      console.log("[CASHIER WEEK MODE ACTIVE]");
+    }
+  }, [isCashier]);
+
+  useEffect(() => {
     if (!isAdmin) return;
     let cancelled = false;
     (async () => {
@@ -211,7 +223,7 @@ function MainWorkspace({ setToken, reportLoading }) {
       opts && Object.prototype.hasOwnProperty.call(opts, "cashierId")
         ? opts.cashierId
         : workspaceCashierId;
-    const salesParams = workspaceGetParams({ from: fromDate, to: toDate });
+    const salesParams = workspaceRangeParams(isCashier, fromDate, toDate);
     if (
       cashierForSales &&
       isAdmin &&
@@ -219,7 +231,7 @@ function MainWorkspace({ setToken, reportLoading }) {
     ) {
       salesParams.cashierId = cashierForSales;
     }
-    const rangeParams = workspaceGetParams({ from: fromDate, to: toDate });
+    const rangeParams = workspaceRangeParams(isCashier, fromDate, toDate);
     const [dashR, salesR, prodR, cliR, payR] = await Promise.allSettled([
       api.get("/api/dashboard", { ...fresh, params: rangeParams }),
       api.get("/api/sales", { ...fresh, params: salesParams }),
@@ -289,7 +301,7 @@ function MainWorkspace({ setToken, reportLoading }) {
     setFetchError(errs.filter(Boolean).join(" · "));
     setInitialSyncDone(true);
     setLoading(false);
-  }, [workspaceCashierId, isAdmin]);
+  }, [workspaceCashierId, isAdmin, isCashier]);
 
   useEffect(() => {
     if (initialFetchRef.current) return;
@@ -388,11 +400,10 @@ function MainWorkspace({ setToken, reportLoading }) {
 
   const handleReset = () => {
     if (isCashier) {
-      const t = new Date().toISOString().slice(0, 10);
-      setFrom(t);
-      setTo(t);
+      setFrom("");
+      setTo("");
       setWorkspaceCashierId("");
-      fetchAll(t, t, { cashierId: "" });
+      fetchAll("", "", { cashierId: "" });
       return;
     }
     setFrom("2020-01-01");
@@ -474,6 +485,7 @@ function MainWorkspace({ setToken, reportLoading }) {
           canViewFinancial={canViewFinancialKpis}
           isAdmin={apiRole === "admin"}
           isCashier={apiRole === "cashier"}
+          hideDateFilters={isCashier}
           cashierWeeklyBreakdown={cashierWeeklyBreakdown}
         />
       ) : null}
@@ -496,6 +508,7 @@ function MainWorkspace({ setToken, reportLoading }) {
           canEditSales={canEditSales}
           canVoidSales={canVoidSales}
           showCashierFilter={isAdmin}
+          hideDateFilters={isCashier}
           cashiers={saleCashiers}
           cashierId={workspaceCashierId}
           onCashierChange={(id) => {

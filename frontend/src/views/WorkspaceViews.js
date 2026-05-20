@@ -56,6 +56,7 @@ export function DashboardView({
   canViewFinancial = false,
   isAdmin = false,
   isCashier = false,
+  hideDateFilters = false,
   cashierWeeklyBreakdown = null,
 }) {
   const metaRole = dashboardMeta?.role;
@@ -100,6 +101,7 @@ export function DashboardView({
           </p>
         </div>
       ) : null}
+      {!hideDateFilters ? (
       <section className="erp-page-toolbar" aria-label={t("dashboard.period")}>
         <div className="erp-filter erp-filter--inline">
           <div className="erp-field">
@@ -160,6 +162,7 @@ export function DashboardView({
           </div>
         </div>
       </section>
+      ) : null}
 
       <section className="erp-section" aria-label={t("dashboard.performance")}>
         <h2 className="erp-section-title">{t("dashboard.performance")}</h2>
@@ -406,6 +409,7 @@ export function SalesView({
   canEditSales = false,
   canVoidSales = false,
   showCashierFilter = false,
+  hideDateFilters = false,
   cashiers = [],
   cashierId = "",
   onCashierChange,
@@ -560,7 +564,7 @@ export function SalesView({
 
   return (
     <section className="erp-section erp-section-flush-top erp-sales-module erp-sales-view-shell">
-      {typeof onApplySalesRange === "function" ? (
+      {typeof onApplySalesRange === "function" && !hideDateFilters ? (
         <section
           className="erp-page-toolbar"
           aria-label={t("dashboard.period")}
