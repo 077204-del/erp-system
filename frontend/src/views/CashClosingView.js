@@ -1,41 +1,101 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import api from "../api";
+import { freshGetConfig, workspaceGetParams } from "../config/apiRequest";
 import ErpModuleFooter from "../components/ErpModuleFooter";
 import { useLocale } from "../context/LocaleContext";
-import { formatMoneyDZD, formatNumber, safeNum } from "../utils/erpFormat";
+import { mapCashClosingApiToState } from "../utils/cashClosingFinance";
+import { parseMoney } from "../utils/financialIntegrity";
+import { apiErrorMessage, formatMoneyDZD, formatNumber } from "../utils/erpFormat";
+
+function hasDisplayAmount(v) {
+  return v !== undefined && v !== null && Number.isFinite(Number(v));
+}
+
 export default function CashClosingView({
-  cash,
-  dashboard,
   from,
   to,
   canViewFinancial = false,
 }) {
   const { t } = useLocale();
+  const [closing, setClosing] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadClosing = useCallback(async () => {
+    if (!from || !to) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await api.get("/api/cash-closing", {
+        ...freshGetConfig(),
+        params: workspaceGetParams({ from, to }),
+      });
+      setClosing(mapCashClosingApiToState(res.data));
+    } catch (err) {
+      setClosing(null);
+      setError(apiErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [from, to]);
+
+  useEffect(() => {
+    loadClosing();
+  }, [loadClosing]);
+
+  const showFinancial =
+    canViewFinancial && closing?.hasFinancialKpis === true;
+
+  const cashSales = parseMoney(closing?.cashSales);
+  const debtPayments = parseMoney(closing?.debtPayments);
+  const cashIn = parseMoney(closing?.cashIn);
+  const profitDelta = closing?.profitIdentityDelta;
+  const profitConsistent =
+    profitDelta == null || Math.abs(Number(profitDelta)) < 0.01;
+
   const recon = useMemo(() => {
-    const a = safeNum(cash.cashSales, 0);
-    const b = safeNum(cash.debtPayments, 0);
-    const sum = a + b;
-    const total = safeNum(cash.totalCashIn, 0);
-    const diff = total - sum;
-    return { sum, total, diff };
-  }, [cash]);
+    const sum = cashSales + debtPayments;
+    return { sum, total: cashIn, diff: cashIn - sum };
+  }, [cashSales, debtPayments, cashIn]);
 
   const exportClosing = () => {
+    if (!closing) return;
     const lines = [
       t("cashClosing.title"),
       `${t("cashClosing.rangeHint")} ${from} → ${to}`,
       new Date().toISOString(),
       "",
-      `${t("cashClosing.cashSales")}: ${formatMoneyDZD(cash.cashSales)}`,
-      `${t("cashClosing.debtPay")}: ${formatMoneyDZD(cash.debtPayments)}`,
+      `${t("cashClosing.cashSales")}: ${formatMoneyDZD(cashSales)}`,
+      `${t("cashClosing.debtPay")}: ${formatMoneyDZD(debtPayments)}`,
       `${t("cashClosing.rowSum")}: ${formatMoneyDZD(recon.sum)}`,
       `${t("cashClosing.rowTotal")}: ${formatMoneyDZD(recon.total)}`,
       `${t("cashClosing.rowDiff")}: ${formatMoneyDZD(recon.diff)}`,
       "",
-      `${t("cashClosing.saleCount")}: ${formatNumber(dashboard.sales)}`,
-      ...(canViewFinancial
+      `${t("cashClosing.saleCount")}: ${formatNumber(
+        hasDisplayAmount(closing.countSales) ? Number(closing.countSales) : 0
+      )}`,
+      ...(showFinancial
         ? [
-            `${t("cashClosing.profit")}: ${formatMoneyDZD(dashboard.realProfit ?? dashboard.profit)}`,
-            `${t("cashClosing.debt")}: ${formatMoneyDZD(dashboard.debt)}`,
+            ...(hasDisplayAmount(closing.totalExpenses)
+              ? [
+                  `${t("cashClosing.totalExpenses")}: ${formatMoneyDZD(Number(closing.totalExpenses))}`,
+                ]
+              : []),
+            ...(hasDisplayAmount(closing.grossProfit)
+              ? [
+                  `${t("cashClosing.grossProfit")}: ${formatMoneyDZD(Number(closing.grossProfit))}`,
+                ]
+              : []),
+            ...(hasDisplayAmount(closing.netProfit)
+              ? [
+                  `${t("cashClosing.netProfit")}: ${formatMoneyDZD(Number(closing.netProfit))}`,
+                ]
+              : []),
+            ...(hasDisplayAmount(closing.totalDebt)
+              ? [
+                  `${t("cashClosing.debt")}: ${formatMoneyDZD(Number(closing.totalDebt))}`,
+                ]
+              : []),
           ]
         : []),
       "",
@@ -52,30 +112,112 @@ export default function CashClosingView({
     URL.revokeObjectURL(href);
   };
 
+  if (loading && !closing) {
+    return (
+      <section className="erp-section erp-section-flush-top">
+        <h2 className="erp-section-title">{t("cashClosing.title")}</h2>
+        <p className="erp-page-lead">{t("cashClosing.loading")}</p>
+        <ErpModuleFooter />
+      </section>
+    );
+  }
+
+  if (error && !closing) {
+    return (
+      <section className="erp-section erp-section-flush-top">
+        <h2 className="erp-section-title">{t("cashClosing.title")}</h2>
+        <p className="erp-page-lead erp-rbac-banner" role="alert">
+          {error}
+        </p>
+        <button
+          type="button"
+          className="erp-btn erp-btn-primary erp-btn-sm"
+          onClick={loadClosing}
+        >
+          {t("cashClosing.retry")}
+        </button>
+        <ErpModuleFooter />
+      </section>
+    );
+  }
+
+  if (!closing) {
+    return (
+      <section className="erp-section erp-section-flush-top">
+        <h2 className="erp-section-title">{t("cashClosing.title")}</h2>
+        <p className="erp-page-lead">{t("cashClosing.unavailable")}</p>
+        <button
+          type="button"
+          className="erp-btn erp-btn-primary erp-btn-sm"
+          onClick={loadClosing}
+        >
+          {t("cashClosing.retry")}
+        </button>
+        <ErpModuleFooter />
+      </section>
+    );
+  }
+
   return (
     <section className="erp-section erp-section-flush-top">
       <h2 className="erp-section-title">{t("cashClosing.title")}</h2>
       <p className="erp-page-lead">{t("cashClosing.lead")}</p>
+      <div className="erp-btn-row" style={{ marginBottom: "0.75rem" }}>
+        <button
+          type="button"
+          className="erp-btn erp-btn-ghost erp-btn-sm"
+          onClick={loadClosing}
+          disabled={loading}
+        >
+          {loading ? t("cashClosing.refreshing") : t("cashClosing.refresh")}
+        </button>
+      </div>
 
       <div className="erp-closing-grid">
         <div className="erp-card erp-card-elevated">
           <p className="erp-card-label">{t("cashClosing.cashSales")}</p>
           <p className="erp-card-value erp-num">
-            {formatMoneyDZD(cash.cashSales)}
+            {formatMoneyDZD(cashSales)}
           </p>
         </div>
         <div className="erp-card erp-card-elevated">
           <p className="erp-card-label">{t("cashClosing.debtPay")}</p>
           <p className="erp-card-value erp-num">
-            {formatMoneyDZD(cash.debtPayments)}
+            {formatMoneyDZD(debtPayments)}
           </p>
         </div>
         <div className="erp-card erp-card-elevated">
           <p className="erp-card-label">{t("cashClosing.totalCashIn")}</p>
-          <p className="erp-card-value erp-num">
-            {formatMoneyDZD(cash.totalCashIn)}
-          </p>
+          <p className="erp-card-value erp-num">{formatMoneyDZD(cashIn)}</p>
+          <p className="erp-card-hint">{t("cashClosing.cashInHint")}</p>
         </div>
+        {showFinancial && hasDisplayAmount(closing.grossProfit) ? (
+          <div className="erp-card erp-card-elevated">
+            <p className="erp-card-label">{t("cashClosing.grossProfit")}</p>
+            <p className="erp-card-value erp-num">
+              {formatMoneyDZD(Number(closing.grossProfit))}
+            </p>
+            <p className="erp-card-hint">{t("cashClosing.grossProfitHint")}</p>
+          </div>
+        ) : null}
+        {showFinancial && hasDisplayAmount(closing.totalExpenses) ? (
+          <div className="erp-card erp-card-elevated">
+            <p className="erp-card-label">{t("cashClosing.totalExpenses")}</p>
+            <p className="erp-card-value erp-num">
+              {formatMoneyDZD(Number(closing.totalExpenses))}
+            </p>
+            <p className="erp-card-hint">{t("cashClosing.expensesHint")}</p>
+          </div>
+        ) : null}
+        {showFinancial && hasDisplayAmount(closing.netProfit) ? (
+          <div className="erp-card erp-card-elevated">
+            <p className="erp-card-label">{t("cashClosing.netProfit")}</p>
+            <p className="erp-card-value erp-num">
+              {formatMoneyDZD(Number(closing.netProfit))}
+            </p>
+            <p className="erp-card-hint">{t("cashClosing.netProfitHint")}</p>
+          </div>
+        ) : null}
       </div>
 
       <div className="erp-card erp-card-elevated erp-closing-recon">
@@ -115,16 +257,36 @@ export default function CashClosingView({
         <p className="erp-card-hint">
           {t("cashClosing.rangeHint")} {from} → {to}.{" "}
           {t("cashClosing.saleCount")}{" "}
-          <span className="erp-num">{formatNumber(dashboard.sales)}</span>
-          {canViewFinancial ? (
+          <span className="erp-num">
+            {formatNumber(
+              hasDisplayAmount(closing.countSales)
+                ? Number(closing.countSales)
+                : 0
+            )}
+          </span>
+          {showFinancial && !profitConsistent ? (
             <>
               {" "}
-              · {t("cashClosing.profit")}{" "}
+              · <span className="erp-badge erp-badge--warning">Δ profit</span>{" "}
+              <span className="erp-num">{formatMoneyDZD(profitDelta)}</span>
+            </>
+          ) : null}
+          {showFinancial && hasDisplayAmount(closing.netProfit) ? (
+            <>
+              {" "}
+              · {t("cashClosing.netProfit")}{" "}
               <span className="erp-num">
-                {formatMoneyDZD(dashboard.realProfit ?? dashboard.profit)}
-              </span>{" "}
+                {formatMoneyDZD(Number(closing.netProfit))}
+              </span>
+            </>
+          ) : null}
+          {showFinancial && hasDisplayAmount(closing.totalDebt) ? (
+            <>
+              {" "}
               · {t("cashClosing.debt")}{" "}
-              <span className="erp-num">{formatMoneyDZD(dashboard.debt)}</span>
+              <span className="erp-num">
+                {formatMoneyDZD(Number(closing.totalDebt))}
+              </span>
             </>
           ) : null}
         </p>

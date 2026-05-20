@@ -127,7 +127,6 @@ function MainWorkspace({ setToken, reportLoading }) {
     debtPayments: 0,
     totalCashIn: 0,
   });
-
   const [sales, setSales] = useState([]);
   const [products, setProducts] = useState([]);
   const [clients, setClients] = useState([]);
@@ -150,8 +149,7 @@ function MainWorkspace({ setToken, reportLoading }) {
   const isCashier = roleLower === "cashier";
   const permObj = storedUser?.permissions;
   const perms = permObj && typeof permObj === "object" ? permObj : {};
-  const canViewReports =
-    isAdmin || isManager || perms.canViewReports === true;
+  const canViewReports = isAdmin || isManager;
   const canManageExpenses =
     isAdmin || isManager || perms.canManageExpenses === true;
   const canManageProducts =
@@ -220,27 +218,13 @@ function MainWorkspace({ setToken, reportLoading }) {
     ) {
       salesParams.cashierId = cashierForSales;
     }
+    const rangeParams = workspaceGetParams({ from: fromDate, to: toDate });
     const [dashR, salesR, prodR, cliR, payR] = await Promise.allSettled([
-      api.get("/api/dashboard", {
-        ...fresh,
-        params: workspaceGetParams({ from: fromDate, to: toDate }),
-      }),
-      api.get("/api/sales", {
-        ...fresh,
-        params: salesParams,
-      }),
-      api.get("/api/products", {
-        ...fresh,
-        params: workspaceGetParams(),
-      }),
-      api.get("/api/clients", {
-        ...fresh,
-        params: workspaceGetParams(),
-      }),
-      api.get("/api/payments", {
-        ...fresh,
-        params: workspaceGetParams(),
-      }),
+      api.get("/api/dashboard", { ...fresh, params: rangeParams }),
+      api.get("/api/sales", { ...fresh, params: salesParams }),
+      api.get("/api/products", { ...fresh, params: workspaceGetParams() }),
+      api.get("/api/clients", { ...fresh, params: workspaceGetParams() }),
+      api.get("/api/payments", { ...fresh, params: workspaceGetParams() }),
     ]);
 
     if (dashR.status === "fulfilled") {
@@ -587,11 +571,9 @@ function MainWorkspace({ setToken, reportLoading }) {
 
       {activeView === "cash-closing" ? (
         <CashClosingView
-          cash={cash}
-          dashboard={dashboard}
           from={from}
           to={to}
-          canViewFinancial={canViewFinancialKpis}
+          canViewFinancial={isAdmin || isManager}
         />
       ) : null}
 
@@ -602,6 +584,8 @@ function MainWorkspace({ setToken, reportLoading }) {
           loading={loading}
           onRefresh={() => fetchAll(from, to)}
           canViewFinancial={canViewFinancialKpis}
+          workspaceFrom={from}
+          workspaceTo={to}
         />
       ) : null}
 

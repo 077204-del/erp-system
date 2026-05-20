@@ -202,13 +202,23 @@ export function DashboardView({
                   tone="amber"
                 />
               ) : null}
+              {isCashier &&
+              dashboard?.cashIn != null &&
+              Number.isFinite(Number(dashboard.cashIn)) ? (
+                <KpiCard
+                  label={t("dashboard.totalCashIn")}
+                  value={formatMoneyDZD(Number(dashboard.cashIn))}
+                  hint={t("dashboard.totalCashInHint")}
+                  tone="cyan"
+                />
+              ) : null}
               {showFinancial ? (
                 <>
-                  {dashboard?.netCashFlow != null &&
-                  Number.isFinite(Number(dashboard.netCashFlow)) ? (
+                  {dashboard?.cashIn != null &&
+                  Number.isFinite(Number(dashboard.cashIn)) ? (
                     <KpiCard
                       label={t("dashboard.totalCashIn")}
-                      value={formatMoneyDZD(Number(dashboard.netCashFlow))}
+                      value={formatMoneyDZD(Number(dashboard.cashIn))}
                       hint={t("dashboard.totalCashInHint")}
                       tone="cyan"
                     />

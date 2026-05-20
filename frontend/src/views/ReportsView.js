@@ -3,14 +3,9 @@ import api from "../api";
 import { freshGetConfig, workspaceGetParams } from "../config/apiRequest";
 import ErpModuleFooter from "../components/ErpModuleFooter";
 import { useLocale } from "../context/LocaleContext";
-import {
-  cashVsCreditFromSales,
-  groupSalesByDay,
-  groupSalesByMonth,
-  topClientsFromSales,
-  topProductsFromSales,
-} from "../utils/erpAggregates";
-import { formatMoneyDZD, formatNumber, safeText } from "../utils/erpFormat";
+import { groupSalesByDay, groupSalesByMonth } from "../utils/erpAggregates";
+import { formatMoneyDZD, formatNumber, safeNum, safeText } from "../utils/erpFormat";
+import { mapReportsApiToState } from "../utils/reportsFinance";
 
 function parseRangeBounds(fromIso, toIso) {
   const a = new Date(`${fromIso}T00:00:00`);
@@ -80,36 +75,41 @@ export default function ReportsView({
     };
   }, [reportFrom, reportTo, cashierId, showCashierDropdown]);
 
+  const reportKpis = useMemo(
+    () => mapReportsApiToState(serverReport),
+    [serverReport]
+  );
+
   const byDay = useMemo(() => groupSalesByDay(sales), [sales]);
   const byMonth = useMemo(() => groupSalesByMonth(sales), [sales]);
-  const cashCredit = useMemo(() => cashVsCreditFromSales(sales), [sales]);
-  const topProdLocal = useMemo(
-    () => topProductsFromSales(sales, 6),
-    [sales]
-  );
-  const topCliLocal = useMemo(() => topClientsFromSales(sales, 6), [sales]);
+
+  const cashCredit = useMemo(() => {
+    const cvc = reportKpis?.cashVsCredit;
+    if (!cvc) return { cash: 0, credit: 0, mixed: 0 };
+    return {
+      cash: safeNum(cvc.cashSales),
+      credit: safeNum(cvc.creditSales),
+      mixed: safeNum(cvc.mixed),
+    };
+  }, [reportKpis]);
 
   const topProd = useMemo(() => {
-    const tp = serverReport?.topProducts;
-    if (Array.isArray(tp) && tp.length) {
-      return tp.slice(0, 6).map((p) => ({
-        name: p.name,
-        revenue: p.revenue,
-      }));
-    }
-    return topProdLocal;
-  }, [serverReport, topProdLocal]);
+    const tp = reportKpis?.topProducts;
+    if (!Array.isArray(tp) || !tp.length) return [];
+    return tp.slice(0, 6).map((p) => ({
+      name: p.name,
+      revenue: p.revenue,
+    }));
+  }, [reportKpis]);
 
   const topCli = useMemo(() => {
-    const tc = serverReport?.topClients;
-    if (Array.isArray(tc) && tc.length) {
-      return tc.slice(0, 6).map((c) => ({
-        name: c.name,
-        revenue: c.revenue,
-      }));
-    }
-    return topCliLocal;
-  }, [serverReport, topCliLocal]);
+    const tc = reportKpis?.topClients;
+    if (!Array.isArray(tc) || !tc.length) return [];
+    return tc.slice(0, 6).map((c) => ({
+      name: c.name,
+      revenue: c.revenue,
+    }));
+  }, [reportKpis]);
 
   const payFiltered = useMemo(
     () => paymentsInRange(payments, reportFrom, reportTo),
@@ -122,11 +122,11 @@ export default function ReportsView({
     return Math.max(...byDay.map((d) => d.revenue), 1);
   }, [byDay]);
 
-  const expDaily = Number(serverReport?.expensesBreakdown?.daily);
-  const expMonthly = Number(serverReport?.expensesBreakdown?.monthly);
-  const repNetCashFlow = Number(serverReport?.netCashFlow);
-  const repNetProfit = Number(serverReport?.netProfit);
-  const cvc = serverReport?.cashVsCredit;
+  const expDaily = reportKpis?.expensesBreakdown?.daily ?? 0;
+  const expMonthly = reportKpis?.expensesBreakdown?.monthly ?? 0;
+  const repCashIn = reportKpis?.cashIn ?? 0;
+  const repNetProfit = reportKpis?.netProfit ?? 0;
+  const cvc = reportKpis?.cashVsCredit;
   const cashPct =
     cvc && Number.isFinite(Number(cvc.ratioCash))
       ? Math.round(Number(cvc.ratioCash) * 100)
@@ -137,7 +137,7 @@ export default function ReportsView({
       <h2 className="erp-section-title">{t("reports.title")}</h2>
       <p className="erp-page-lead">
         {t("reports.lead")}
-        {!serverReport ? (
+        {!reportKpis ? (
           <span> {t("reports.unavailable")}</span>
         ) : null}
       </p>
@@ -226,7 +226,7 @@ export default function ReportsView({
           </button>
         </div>
       </section>
-      {serverReport && showFinancialReportKpis ? (
+      {reportKpis && showFinancialReportKpis ? (
         <div className="erp-kpi-grid" style={{ marginBottom: "1rem" }}>
           <div className="erp-card erp-card-kpi">
             <p className="erp-card-label">{t("reports.expDaily")}</p>
@@ -245,9 +245,7 @@ export default function ReportsView({
           <div className="erp-card erp-card-kpi">
             <p className="erp-card-label">{t("dashboard.totalCashIn")}</p>
             <p className="erp-card-value erp-num">
-              {formatMoneyDZD(
-                Number.isFinite(repNetCashFlow) ? repNetCashFlow : 0
-              )}
+              {formatMoneyDZD(Number.isFinite(repCashIn) ? repCashIn : 0)}
             </p>
             <p className="erp-card-hint">{t("dashboard.totalCashInHint")}</p>
           </div>
@@ -318,16 +316,16 @@ export default function ReportsView({
           <p className="erp-card-hint">
             {t("reports.paymentsRegister")}{" "}
             <span className="erp-num">{formatNumber(payCount)}</span>
-            {serverReport && canViewFinancialKpis ? (
+            {reportKpis && canViewFinancialKpis ? (
               <>
                 {" "}
                 · {t("reports.ledgerRev")}{" "}
                 <span className="erp-num">
-                  {formatMoneyDZD(serverReport.revenue)}
+                  {formatMoneyDZD(reportKpis.revenue)}
                 </span>{" "}
                 · {t("reports.cashInSuffix")}{" "}
                 <span className="erp-num">
-                  {formatMoneyDZD(serverReport.cash?.totalCashIn)}
+                  {formatMoneyDZD(reportKpis.cashIn)}
                 </span>
               </>
             ) : null}

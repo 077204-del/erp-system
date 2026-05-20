@@ -1,12 +1,7 @@
 /**
- * Maps GET /api/dashboard → UI state. Display only — no calculations or fallbacks.
- * Contract: meta.role drives visibility; financial.netProfit is the sole profit field.
+ * Maps GET /api/dashboard → UI state. Display only — computeCore via API.
  */
-function finiteNumber(value) {
-  if (value == null || value === "") return undefined;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : undefined;
-}
+import { parseMoneyOptional, pickMoney } from "./financialIntegrity";
 
 function isPrivilegedRole(role) {
   return role === "admin" || role === "manager";
@@ -20,10 +15,11 @@ export function mapDashboardApiToState(data) {
   const cash = data?.cash;
 
   const dashboard = {};
-  const salesCount =
-    finiteNumber(stats.salesCount) ?? finiteNumber(stats.sales);
-  const totalSales = finiteNumber(stats.totalSales);
-  const debt = finiteNumber(data?.debt);
+  const salesCount = parseMoneyOptional(
+    pickMoney(stats, ["salesCount", "sales"])
+  );
+  const totalSales = parseMoneyOptional(stats.totalSales);
+  const debt = parseMoneyOptional(data?.debt);
 
   if (salesCount !== undefined) {
     dashboard.salesCount = salesCount;
@@ -36,35 +32,55 @@ export function mapDashboardApiToState(data) {
     dashboard.debt = debt;
   }
 
+  if (role === "cashier") {
+    const cashInVal = parseMoneyOptional(
+      pickMoney(cash, ["totalCashIn", "cashIn"])
+    );
+    if (cashInVal !== undefined) {
+      dashboard.cashIn = cashInVal;
+    }
+    const cashOut = {};
+    if (cashInVal !== undefined) cashOut.totalCashIn = cashInVal;
+    const cashSalesVal = parseMoneyOptional(cash?.cashSales);
+    const debtPaymentsVal = parseMoneyOptional(cash?.debtPayments);
+    if (cashSalesVal !== undefined) cashOut.cashSales = cashSalesVal;
+    if (debtPaymentsVal !== undefined) cashOut.debtPayments = debtPaymentsVal;
+    return {
+      meta,
+      dashboard,
+      cash: Object.keys(cashOut).length > 0 ? cashOut : undefined,
+    };
+  }
+
   if (!isPrivilegedRole(role)) {
     return { meta, dashboard };
   }
 
   if (fin && typeof fin === "object") {
-    const revenue = finiteNumber(fin.revenue);
-    const grossProfit = finiteNumber(fin.grossProfit);
-    const netProfit = finiteNumber(fin.netProfit);
-    const expenses = finiteNumber(fin.expenses);
+    const revenue = parseMoneyOptional(fin.revenue);
+    const grossProfit = parseMoneyOptional(fin.grossProfit);
+    const netProfit = parseMoneyOptional(fin.netProfit);
+    const expenses = parseMoneyOptional(fin.expenses);
     if (revenue !== undefined) dashboard.totalSales = revenue;
     if (grossProfit !== undefined) dashboard.grossProfit = grossProfit;
     if (netProfit !== undefined) dashboard.netProfit = netProfit;
     if (expenses !== undefined) dashboard.totalExpenses = expenses;
   }
 
-  const cashIn = finiteNumber(cash?.totalCashIn);
+  const cashIn = parseMoneyOptional(pickMoney(cash, ["totalCashIn", "cashIn"]));
   if (cashIn !== undefined) {
-    dashboard.netCashFlow = cashIn;
+    dashboard.cashIn = cashIn;
   }
 
-  const inventoryCapital = finiteNumber(data?.inventoryCapital);
+  const inventoryCapital = parseMoneyOptional(data?.inventoryCapital);
   if (role === "admin" && inventoryCapital !== undefined) {
     dashboard.inventoryCapital = inventoryCapital;
   }
 
   const cashOut = {};
-  const cashInVal = finiteNumber(cash?.totalCashIn);
-  const cashSalesVal = finiteNumber(cash?.cashSales);
-  const debtPaymentsVal = finiteNumber(cash?.debtPayments);
+  const cashInVal = parseMoneyOptional(pickMoney(cash, ["totalCashIn", "cashIn"]));
+  const cashSalesVal = parseMoneyOptional(cash?.cashSales);
+  const debtPaymentsVal = parseMoneyOptional(cash?.debtPayments);
   if (cashInVal !== undefined) cashOut.totalCashIn = cashInVal;
   if (cashSalesVal !== undefined) cashOut.cashSales = cashSalesVal;
   if (debtPaymentsVal !== undefined) cashOut.debtPayments = debtPaymentsVal;

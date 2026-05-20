@@ -184,7 +184,7 @@ export function buildRegisterEvents(sales, payments) {
   }
   if (Array.isArray(payments)) {
     payments.forEach((p) => {
-      const at = new Date(p.createdAt || 0);
+      const at = new Date(p.recordedAt || p.createdAt || 0);
       if (Number.isNaN(at.getTime())) return;
       const clientName =
         p.clientId && typeof p.clientId === "object" && p.clientId.name
