@@ -11,6 +11,7 @@ import { apiErrorMessage } from "./utils/erpFormat";
 import { freshGetConfig, workspaceGetParams } from "./config/apiRequest";
 import { mapDashboardApiToState } from "./utils/dashboardFinance";
 import { normalizeRoleClient } from "./utils/rbacClient";
+import { localCalendarYmd } from "./utils/localCalendarYmd";
 import { purgeApiCachesOnBoot } from "./offline/responseCache";
 import CashClosingView from "./views/CashClosingView";
 import ClientDebtView from "./views/ClientDebtView";
@@ -99,7 +100,7 @@ function initialRangeForRole() {
   try {
     const u = readStoredUserWithJwtSync();
     if (String(u?.role || "").toLowerCase() === "cashier") {
-      const t = new Date().toISOString().slice(0, 10);
+      const t = localCalendarYmd(new Date());
       return { from: t, to: t };
     }
   } catch {
@@ -320,6 +321,16 @@ function MainWorkspace({ setToken, reportLoading }) {
     window.addEventListener("erp:unauthorized", onAuthLost);
     return () => window.removeEventListener("erp:unauthorized", onAuthLost);
   }, [setToken, toast, t]);
+
+  /** Keep React session in sync with localStorage (other tabs, external clears). */
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== "token") return;
+      setToken(e.newValue || null);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [setToken]);
 
   useEffect(() => {
     if (!fetchError) return;
@@ -628,6 +639,21 @@ export default function App() {
       /* ignore */
     }
   }, []);
+
+  /** Same-tab: localStorage clears do not fire `storage`; refocus re-syncs session. */
+  useEffect(() => {
+    if (!token) return undefined;
+    const onFocus = () => {
+      try {
+        const t = localStorage.getItem("token");
+        if (!t || !String(t).trim()) setToken(null);
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [token, setToken]);
 
   if (mobilePreview) {
     return <MobileLayoutPreview />;

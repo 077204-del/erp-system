@@ -6,6 +6,7 @@ import {
 } from "./config/apiBase";
 import { applyOfflineMutationGate } from "./offline/offlineRequestGate";
 import { installOfflineApi, tryServeCachedGet } from "./offline/installOfflineApi";
+import { attachBearerAuth } from "./utils/attachBearerAuth";
 
 initApiBaseRuntime();
 
@@ -31,11 +32,7 @@ api.interceptors.request.use((config) => {
       console.log("API BASE:", baseURL);
     }
   }
-  const token = localStorage.getItem("token");
-
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  attachBearerAuth(config);
 
   return applyOfflineMutationGate(config);
 });

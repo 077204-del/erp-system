@@ -39,6 +39,14 @@ function toNumber(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Set `ERP_TRACE_COMPUTE_CORE=1` or `ERP_TRACE_LEDGER=1` to log payments → cashIn. */
+function traceComputeCoreEnabled() {
+  const v = String(
+    process.env.ERP_TRACE_COMPUTE_CORE || process.env.ERP_TRACE_LEDGER || ""
+  ).trim();
+  return v === "1";
+}
+
 function productCostPrice(sale) {
   const p = sale && sale.productId;
   if (p && typeof p === "object" && p.costPrice != null) {
@@ -61,6 +69,35 @@ async function computeCore(from, to, ledgerOptions = {}) {
     to,
     ledgerOptions
   );
+
+  if (traceComputeCoreEnabled()) {
+    const scoped =
+      ledgerOptions &&
+      ledgerOptions.cashierId != null &&
+      String(ledgerOptions.cashierId).trim();
+    const paySource = scoped
+      ? `fetchPaymentsInDashboardRangeForCashier(cashierId=${String(ledgerOptions.cashierId).trim()})`
+      : "fetchPaymentsInDashboardRange(unscoped)";
+    const payPreview = (payments || []).slice(0, 40).map((p) => ({
+      amount: p && p.amount,
+      saleId: p && p.saleId,
+      type: p && p.type,
+      recordedAt: p && p.recordedAt,
+      createdAt: p && p.createdAt,
+    }));
+    console.log("[computeCore] enter", {
+      from,
+      to,
+      ledgerOptions,
+      paymentFetch: paySource,
+      salesCount: sales.length,
+      paymentsLength: payments.length,
+    });
+    console.log("[computeCore] payments (before reduce, first 40):", payPreview);
+    if (payments.length > 40) {
+      console.log("[computeCore] …truncated, total payments:", payments.length);
+    }
+  }
 
   let revenue = 0;
   let cost = 0;
@@ -107,8 +144,27 @@ async function computeCore(from, to, ledgerOptions = {}) {
     }
   }
 
+  if (traceComputeCoreEnabled()) {
+    console.log("[computeCore] orphanSaleCash (after sale loop):", orphanSaleCash);
+  }
+
   const cashInFromPayments = payments.reduce((acc, p) => acc + toNumber(p.amount), 0);
   const cashIn = toNumber(cashInFromPayments + orphanSaleCash);
+
+  if (traceComputeCoreEnabled()) {
+    console.log("[computeCore] cashInFromPayments (Σ payment.amount):", cashInFromPayments);
+    console.log("[computeCore] cashIn (final):", cashIn, "=", cashInFromPayments, "+", orphanSaleCash);
+    console.log("[computeCore] summary", {
+      from,
+      to,
+      ledgerOptions,
+      salesCount: sales.length,
+      paymentsLength: payments.length,
+      cashInFromPayments,
+      orphanSaleCash,
+      cashIn,
+    });
+  }
 
   const cashSalesFromPayments = payments
     .filter((p) => {
@@ -176,10 +232,23 @@ function ledgerOptionsForContext(userRole, userId, filterCashierId) {
   return opts;
 }
 
-/** Cashier: canonical week range; others: request from/to unchanged. */
+/** Cashier: canonical week unless query is one explicit calendar day (from === to as YYYY-MM-DD). */
 function resolveQueryPeriod(userRole, from, to) {
   if (resolveUserRole(userRole) === "cashier") {
-    return resolveCashierFromTo();
+    const f = from != null ? String(from).trim() : "";
+    const t = to != null ? String(to).trim() : "";
+    const ymd = /^\d{4}-\d{2}-\d{2}$/;
+    if (ymd.test(f) && f === t) {
+      if (traceComputeCoreEnabled()) {
+        console.log("[resolveQueryPeriod] cashier single-day", { from: f, to: t });
+      }
+      return { from: f, to: t };
+    }
+    const w = resolveCashierFromTo();
+    if (traceComputeCoreEnabled()) {
+      console.log("[resolveQueryPeriod] cashier week (resolveCashierFromTo)", w);
+    }
+    return w;
   }
   return { from, to };
 }

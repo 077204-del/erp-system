@@ -350,6 +350,11 @@ function sanitizeCashClosingResponse(payload, role) {
   return { ...p, access };
 }
 
+/** `ERP_TRACE_REGISTER=1` — log Daily Register sanitize input/output. */
+function traceRegisterSanitize() {
+  return String(process.env.ERP_TRACE_REGISTER || "").trim() === "1";
+}
+
 function registerOperationalCashSource(p) {
   const nest = p.cash && typeof p.cash === "object" ? p.cash : {};
   return {
@@ -395,6 +400,19 @@ function sanitizeDailyRegisterResponse(payload, role) {
   const access = buildAccess(r);
   const src = registerOperationalCashSource(p);
 
+  if (traceRegisterSanitize()) {
+    console.log("[sanitizeDailyRegisterResponse] IN", {
+      roleArg: role,
+      resolvedRole: r,
+      canViewFinancialKpis: canViewFinancialKpis(r),
+      keys: Object.keys(p),
+      cashIn: p.cashIn,
+      paymentsTotal: p.paymentsTotal,
+      netCash: p.netCash,
+      cash: p.cash,
+    });
+  }
+
   const base = {
     date: p.date,
     salesCount: p.salesCount,
@@ -432,10 +450,20 @@ function sanitizeDailyRegisterResponse(payload, role) {
   };
 
   if (!canViewFinancialKpis(r)) {
-    return { ...base, access };
+    const out = { ...base, access };
+    if (traceRegisterSanitize()) {
+      console.log("[sanitizeDailyRegisterResponse] OUT (cashier / no financial KPIs)", {
+        keys: Object.keys(out),
+        cashIn: out.cashIn,
+        paymentsTotal: out.paymentsTotal,
+        netCash: out.netCash,
+        cash: out.cash,
+      });
+    }
+    return out;
   }
 
-  return {
+  const outPrivileged = {
     ...base,
     expensesTotal: formatMoneyField(p.expensesTotal ?? p.expenses),
     expenses: formatMoneyField(p.expenses),
@@ -445,6 +473,15 @@ function sanitizeDailyRegisterResponse(payload, role) {
     netProfit: formatMoneyField(p.netProfit),
     access,
   };
+  if (traceRegisterSanitize()) {
+    console.log("[sanitizeDailyRegisterResponse] OUT (admin/manager)", {
+      keys: Object.keys(outPrivileged),
+      cashIn: outPrivileged.cashIn,
+      paymentsTotal: outPrivileged.paymentsTotal,
+      netCash: outPrivileged.netCash,
+    });
+  }
+  return outPrivileged;
 }
 
 function sanitizeCashSessionResponse(session, role) {

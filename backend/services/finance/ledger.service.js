@@ -6,6 +6,14 @@ const Product = require("../../models/product.model");
 const User = require("../../models/user.model");
 const { rangeBoundsUTC } = require("../expenseQuery.service");
 
+/** Set `ERP_TRACE_LEDGER=1` (or `ERP_TRACE_COMPUTE_CORE=1`) for ledger + computeCore traces. */
+function traceLedgerEnabled() {
+  const v = String(
+    process.env.ERP_TRACE_LEDGER || process.env.ERP_TRACE_COMPUTE_CORE || ""
+  ).trim();
+  return v === "1";
+}
+
 function toNumber(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0;
@@ -17,12 +25,30 @@ function toNumber(value) {
  * YYYY-MM-DD uses startOfDay(from) … endOfDay(to) — not UTC midnight from Date.parse.
  */
 function getDateRange(from, to) {
+  if (traceLedgerEnabled()) {
+    console.log("[getDateRange] input", {
+      from,
+      to,
+      fromType: typeof from,
+      toType: typeof to,
+    });
+  }
   if (!from || !to) return null;
 
   const fromStr = String(from).trim();
   const toStr = String(to).trim();
   const ymdBounds = rangeBoundsUTC(fromStr, toStr);
   if (ymdBounds) {
+    if (traceLedgerEnabled()) {
+      console.log("[getDateRange] rangeBoundsUTC", {
+        fromStr,
+        toStr,
+        startISO: ymdBounds.start.toISOString(),
+        endISO: ymdBounds.end.toISOString(),
+        startMs: ymdBounds.start.getTime(),
+        endMs: ymdBounds.end.getTime(),
+      });
+    }
     return ymdBounds;
   }
 
@@ -38,6 +64,17 @@ function getDateRange(from, to) {
   }
   start.setHours(0, 0, 0, 0);
   end.setHours(23, 59, 59, 999);
+
+  if (traceLedgerEnabled()) {
+    console.log("[getDateRange] parsed fallback", {
+      fromStr,
+      toStr,
+      startISO: start.toISOString(),
+      endISO: end.toISOString(),
+      startMs: start.getTime(),
+      endMs: end.getTime(),
+    });
+  }
 
   return { start, end };
 }
@@ -281,6 +318,23 @@ async function fetchPeriodLedgerData(from, to, options = {}) {
       ? fetchPaymentsInDashboardRangeForCashier(range, cashierOid)
       : fetchPaymentsInDashboardRange(range),
   ]);
+  if (traceLedgerEnabled()) {
+    const paymentFunction = cashierOid
+      ? "fetchPaymentsInDashboardRangeForCashier"
+      : "fetchPaymentsInDashboardRange";
+    console.log("[fetchPeriodLedgerData]", {
+      from,
+      to,
+      options: options && typeof options === "object" ? { ...options } : {},
+      cashierFilterApplied: Boolean(cashierOid),
+      cashierId: cashierRaw || null,
+      paymentFunction,
+      rangeStartISO: range && range.start ? range.start.toISOString() : null,
+      rangeEndISO: range && range.end ? range.end.toISOString() : null,
+      salesCount: sales.length,
+      paymentsCount: payments.length,
+    });
+  }
   return {
     range: { from, to },
     sales,

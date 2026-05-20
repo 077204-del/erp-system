@@ -1,5 +1,6 @@
 import axios from "axios";
 import { getApiBaseUrl, isDeprecatedApiHost } from "../config/apiBase";
+import { attachBearerAuth } from "../utils/attachBearerAuth";
 import {
   cacheSuccessfulGet,
   invalidateWorkspaceCaches,
@@ -63,11 +64,7 @@ function getReplayClient() {
     });
     replayClient.interceptors.request.use((config) => {
       config.__erpReplay = true;
-      const token = localStorage.getItem("token");
-      if (token) {
-        config.headers = config.headers || {};
-        config.headers.Authorization = `Bearer ${token}`;
-      }
+      attachBearerAuth(config);
       return config;
     });
   }

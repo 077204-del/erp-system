@@ -9,8 +9,28 @@ import { parseMoney, parseMoneyOptional, pickMoney } from "./financialIntegrity"
  */
 
 export function mapDailyRegisterApiToState(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
 
-  if (!data || typeof data !== "object") return null;
+  const msg = String(data.message || "").trim().toLowerCase();
+  const hasRegisterShape =
+    data.date != null ||
+    data.salesTotal != null ||
+    data.salesCount != null ||
+    data.cashIn != null ||
+    data.totalCashIn != null ||
+    data.paymentsTotal != null ||
+    data.netCash != null ||
+    (data.cash &&
+      typeof data.cash === "object" &&
+      (data.cash.cashIn != null ||
+        data.cash.totalCashIn != null ||
+        data.cash.paymentsTotal != null));
+
+  const authLike =
+    msg === "no token" || msg === "invalid token" || msg === "forbidden";
+  if (authLike && !hasRegisterShape) {
+    return null;
+  }
 
 
 

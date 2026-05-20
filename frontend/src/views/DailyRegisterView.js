@@ -17,15 +17,13 @@ import {
 import { formatNumber, safeText } from "../utils/erpFormat";
 
 import { mapDailyRegisterApiToState } from "../utils/registerFinance";
-
-
+import {
+  localCalendarYmd,
+  isSameLocalCalendarDay,
+} from "../utils/localCalendarYmd";
 
 function todayIso() {
-
-  const t = new Date();
-
-  return t.toISOString().slice(0, 10);
-
+  return localCalendarYmd(new Date());
 }
 
 
@@ -55,19 +53,7 @@ function parseDayEnd(iso) {
 
 
 function isSameCalendarDay(iso, d) {
-
-  if (!iso || !d) return false;
-
-  try {
-
-    return d.toISOString().slice(0, 10) === iso;
-
-  } catch {
-
-    return false;
-
-  }
-
+  return isSameLocalCalendarDay(iso, d);
 }
 
 
@@ -163,9 +149,22 @@ export default function DailyRegisterView({
 
 
 
-      if (sumRes.status === "fulfilled" && sumRes.value.data) {
+      const sumOk =
+        sumRes.status === "fulfilled" &&
+        sumRes.value &&
+        sumRes.value.data &&
+        typeof sumRes.value.data === "object";
 
-        const mapped = mapDailyRegisterApiToState(sumRes.value.data);
+      // eslint-disable-next-line no-console
+      console.log("REGISTER RAW RESPONSE", sumRes.value?.data);
+      // eslint-disable-next-line no-console
+      console.log("SUMOK RESULT", sumOk);
+
+      if (sumOk) {
+
+        const payload = sumRes.value.data;
+
+        const mapped = mapDailyRegisterApiToState(payload);
 
         if (mapped) {
 
@@ -191,19 +190,73 @@ export default function DailyRegisterView({
 
           });
 
+          setSummaryUnavailable(false);
+
         } else {
 
-          setSummary(EMPTY_SUMMARY);
+          const c = payload.cash && typeof payload.cash === "object" ? payload.cash : {};
+          const rawCash =
+            payload.cashIn ??
+            c.cashIn ??
+            c.totalCashIn ??
+            payload.paymentsTotal ??
+            c.paymentsTotal ??
+            payload.netCash ??
+            c.netCash;
+          const n = Number(rawCash);
+          const hasCash = Number.isFinite(n);
+          const hasSales =
+            payload.salesTotal != null || payload.salesCount != null;
 
-          setSummaryUnavailable(true);
+          if (hasCash || hasSales) {
+            const retry = mapDailyRegisterApiToState({
+              ...payload,
+              message: undefined,
+            });
+            if (retry) {
+              setSummary({
+                salesTotal: retry.salesTotal,
+                paymentsTotal: retry.paymentsTotal,
+                expensesTotal: retry.expensesTotal,
+                cashIn: retry.cashIn,
+                totalCashIn: retry.totalCashIn,
+                netCash: retry.netCash,
+                netCashFlow: retry.netCashFlow,
+                cashSales: retry.cashSales,
+                debtPayments: retry.debtPayments,
+              });
+              setSummaryUnavailable(false);
+            } else {
+              const cashIn = hasCash ? Math.max(0, n) : 0;
+              setSummary({
+                salesTotal: Number(payload.salesTotal) || 0,
+                paymentsTotal: cashIn,
+                expensesTotal: Number(payload.expensesTotal) || 0,
+                cashIn,
+                totalCashIn: cashIn,
+                netCash: cashIn,
+                netCashFlow: Number(payload.netCashFlow) || cashIn,
+                cashSales: Number(c.cashSales) || 0,
+                debtPayments: Number(c.debtPayments) || 0,
+              });
+              setSummaryUnavailable(false);
+            }
+          } else {
+            setSummary(EMPTY_SUMMARY);
+            setSummaryUnavailable(true);
+          }
 
         }
 
       } else {
 
-        setSummary(EMPTY_SUMMARY);
-
         setSummaryUnavailable(true);
+        const shouldEmptySummary =
+          sumRes.status === "rejected" ||
+          (sumRes.status === "fulfilled" && !sumRes.value);
+        if (shouldEmptySummary) {
+          setSummary(EMPTY_SUMMARY);
+        }
 
       }
 

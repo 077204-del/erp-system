@@ -4,10 +4,24 @@ const {
   sanitizeDailyRegisterResponse,
 } = require("../services/responseSanitize.service");
 
+/** Set `ERP_TRACE_REGISTER=1` to log Daily Register response pipeline (not computeCore internals). */
+function traceRegisterResponse() {
+  return String(process.env.ERP_TRACE_REGISTER || "").trim() === "1";
+}
+
 function safeDateQuery(v) {
   if (v == null) return "";
   const s = String(v).trim();
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
+}
+
+/** Default register day when `date` query omitted — host local calendar (Render = UTC). */
+function hostLocalCalendarYmd() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 /**
@@ -55,17 +69,37 @@ exports.getDailyRegister = async (req, res) => {
   try {
     let date = safeDateQuery(req.query.date);
     if (!date) {
-      date = new Date().toISOString().slice(0, 10);
+      date = hostLocalCalendarYmd();
     }
 
     const role = roleFromReq(req);
-    const from = date;
-    const to = date;
+    const period = financialEngine.resolveQueryPeriod(role, date, date);
+    const core = await financialEngine.computeCore(period.from, period.to);
 
-    const core = await financialEngine.computeCore(from, to);
+    if (traceRegisterResponse()) {
+      const coreLog = { ...core };
+      if (Array.isArray(coreLog.sales)) {
+        coreLog.sales = `[${coreLog.sales.length} sale docs omitted]`;
+      }
+      console.log("[REGISTER RAW CORE]", coreLog);
+    }
+
     const body = registerPayloadFromCore(core, date, role);
 
-    return res.json(sanitizeDailyRegisterResponse(body, role));
+    if (traceRegisterResponse()) {
+      console.log("[REGISTER FINAL BODY PRE-SANITIZE]", {
+        role,
+        ...body,
+      });
+    }
+
+    const sanitized = sanitizeDailyRegisterResponse(body, role);
+
+    if (traceRegisterResponse()) {
+      console.log("[REGISTER FINAL JSON POST-SANITIZE]", sanitized);
+    }
+
+    return res.json(sanitized);
   } catch (err) {
     console.error(
       "[daily-register] error:",
