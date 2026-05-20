@@ -39,6 +39,131 @@ function KpiCard({ label, value, hint, tone = "blue" }) {
   );
 }
 
+/** Cashier dashboard — KPIs and alerts only; no date/filter UI in this tree. */
+export function CashierDashboardView({
+  loading,
+  initialSyncDone,
+  dashboard,
+  products,
+}) {
+  const { t } = useLocale();
+  const showKpiSkeleton = loading && !initialSyncDone;
+  const totalSalesKpi = safeNum(dashboard?.totalSales, 0);
+  const salesCountKpi = safeNum(
+    dashboard?.salesCount ?? dashboard?.sales,
+    0
+  );
+  const debtKpi =
+    dashboard?.debt != null && Number.isFinite(Number(dashboard.debt))
+      ? Number(dashboard.debt)
+      : null;
+  const kpiSkeletonCount = debtKpi != null ? 3 : 2;
+
+  const lowStockItems = Array.isArray(products)
+    ? products.filter((p) => p.lowStock === true)
+    : [];
+
+  return (
+    <>
+      {lowStockItems.length > 0 ? (
+        <div
+          className="erp-card erp-card-elevated erp-dashboard-warn"
+          role="status"
+          style={{ marginBottom: "1rem" }}
+        >
+          <p className="erp-card-label">{t("dashboard.stockAlertTitle")}</p>
+          <p className="erp-page-lead" style={{ margin: "0.25rem 0 0" }}>
+            {t("dashboard.stockAlertLead")}{" "}
+            <strong className="erp-mono">{lowStockItems.length}</strong>
+          </p>
+        </div>
+      ) : null}
+
+      <section className="erp-section" aria-label={t("dashboard.performance")}>
+        <h2 className="erp-section-title">{t("dashboard.performance")}</h2>
+        <div className="erp-kpi-grid">
+          {showKpiSkeleton ? (
+            <>
+              {Array.from({ length: kpiSkeletonCount }).map((_, i) => (
+                <StatCardSkeleton key={`cashier-dash-sk-${i}`} />
+              ))}
+            </>
+          ) : (
+            <>
+              <KpiCard
+                label={t("dashboard.totalSales")}
+                value={formatMoneyDZD(totalSalesKpi)}
+                hint={t("dashboard.totalSalesHint")}
+                tone="blue"
+              />
+              <KpiCard
+                label={t("dashboard.revenue")}
+                value={formatNumber(salesCountKpi)}
+                hint={t("dashboard.revenueHint")}
+                tone="mint"
+              />
+              {debtKpi != null ? (
+                <KpiCard
+                  label={t("dashboard.debt")}
+                  value={formatMoneyDZD(debtKpi)}
+                  hint={t("dashboard.debtHint")}
+                  tone="amber"
+                />
+              ) : null}
+              {dashboard?.cashIn != null &&
+              Number.isFinite(Number(dashboard.cashIn)) ? (
+                <KpiCard
+                  label={t("dashboard.totalCashIn")}
+                  value={formatMoneyDZD(Number(dashboard.cashIn))}
+                  hint={t("dashboard.totalCashInHint")}
+                  tone="cyan"
+                />
+              ) : null}
+            </>
+          )}
+        </div>
+      </section>
+
+      <section className="erp-section erp-section-tight-top">
+        <div className="erp-two-col">
+          <div className="erp-card erp-card-elevated erp-card-alerts">
+            <p className="erp-card-label">{t("dashboard.lowStock")}</p>
+            {lowStockItems.length === 0 ? (
+              <div className="erp-mini-empty">
+                <span className="erp-badge erp-badge--success">
+                  {t("dashboard.allClear")}
+                </span>
+                <p className="erp-mini-empty__text">
+                  {t("dashboard.lowStockHint")}
+                </p>
+              </div>
+            ) : (
+              <ul className="erp-alert-list">
+                {lowStockItems.slice(0, 8).map((p) => (
+                  <li key={p._id} className="erp-alert-list__item">
+                    <span className="erp-alert-list__name">
+                      {safeText(p.name, "—")}
+                    </span>
+                    <span className="erp-badge erp-badge--warning">
+                      {t("dashboard.qtyAbbr")} {formatNumber(p.qty)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {lowStockItems.length > 8 ? (
+              <p className="erp-card-hint">
+                +{lowStockItems.length - 8} {t("dashboard.moreProducts")}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </section>
+      <ErpModuleFooter />
+    </>
+  );
+}
+
 export function DashboardView({
   loading,
   initialSyncDone,
@@ -58,14 +183,25 @@ export function DashboardView({
   onReset,
   onPreset,
 }) {
+  const { t } = useLocale();
   const roleLower = String(role || dashboardMeta?.role || "")
     .trim()
     .toLowerCase();
-  const isCashierRole = roleLower === "cashier";
+
+  if (roleLower === "cashier") {
+    return (
+      <CashierDashboardView
+        loading={loading}
+        initialSyncDone={initialSyncDone}
+        dashboard={dashboard}
+        products={products}
+      />
+    );
+  }
+
   const showFinancial =
     canViewFinancial === true &&
     (roleLower === "admin" || roleLower === "manager");
-  const { t } = useLocale();
   const showKpiSkeleton = loading && !initialSyncDone;
   const totalSalesKpi = safeNum(dashboard?.totalSales, 0);
   const salesCountKpi = safeNum(
@@ -103,7 +239,6 @@ export function DashboardView({
           </p>
         </div>
       ) : null}
-      {roleLower !== "cashier" ? (
       <section className="erp-page-toolbar" aria-label={t("dashboard.period")}>
         <div className="erp-filter erp-filter--inline">
           <div className="erp-field">
@@ -164,7 +299,6 @@ export function DashboardView({
           </div>
         </div>
       </section>
-      ) : null}
 
       <section className="erp-section" aria-label={t("dashboard.performance")}>
         <h2 className="erp-section-title">{t("dashboard.performance")}</h2>
@@ -205,16 +339,6 @@ export function DashboardView({
                   value={formatMoneyDZD(debtKpi)}
                   hint={t("dashboard.debtHint")}
                   tone="amber"
-                />
-              ) : null}
-              {isCashierRole &&
-              dashboard?.cashIn != null &&
-              Number.isFinite(Number(dashboard.cashIn)) ? (
-                <KpiCard
-                  label={t("dashboard.totalCashIn")}
-                  value={formatMoneyDZD(Number(dashboard.cashIn))}
-                  hint={t("dashboard.totalCashInHint")}
-                  tone="cyan"
                 />
               ) : null}
               {showFinancial ? (

@@ -27,6 +27,7 @@ import UsersModuleView from "./views/UsersModuleView";
 import AuditLogsView from "./views/AuditLogsView";
 import ExpensesView from "./views/ExpensesView";
 import {
+  CashierDashboardView,
   ClientsView,
   DashboardView,
   PaymentsView,
@@ -513,25 +514,34 @@ function MainWorkspace({ setToken, reportLoading }) {
       </div>
 
       {activeView === "dashboard" ? (
-        <DashboardView
-          loading={loading}
-          initialSyncDone={initialSyncDone}
-          dashboard={dashboard}
-          cash={cash}
-          products={products}
-          role={apiRole || roleLower}
-          dashboardMeta={dashboardMeta}
-          canViewFinancial={canViewFinancialKpis}
-          isAdmin={apiRole === "admin"}
-          cashierWeeklyBreakdown={cashierWeeklyBreakdown}
-          from={from}
-          to={to}
-          onFromChange={isCashier ? undefined : setFrom}
-          onToChange={isCashier ? undefined : setTo}
-          onApply={handleApply}
-          onReset={handleReset}
-          onPreset={applyReportPreset}
-        />
+        isCashier ? (
+          <CashierDashboardView
+            loading={loading}
+            initialSyncDone={initialSyncDone}
+            dashboard={dashboard}
+            products={products}
+          />
+        ) : (
+          <DashboardView
+            loading={loading}
+            initialSyncDone={initialSyncDone}
+            dashboard={dashboard}
+            cash={cash}
+            products={products}
+            role={apiRole || roleLower}
+            dashboardMeta={dashboardMeta}
+            canViewFinancial={canViewFinancialKpis}
+            isAdmin={apiRole === "admin"}
+            cashierWeeklyBreakdown={cashierWeeklyBreakdown}
+            from={from}
+            to={to}
+            onFromChange={setFrom}
+            onToChange={setTo}
+            onApply={handleApply}
+            onReset={handleReset}
+            onPreset={applyReportPreset}
+          />
+        )
       ) : null}
 
       {activeView === "sales" ? (
