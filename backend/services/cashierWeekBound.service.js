@@ -63,7 +63,14 @@ function getCashierWeekQueryRange(now) {
  */
 function resolveCashierFromTo() {
   const w = getCashierWeekRange();
-  return { from: w.from, to: w.to };
+  if (isValidYmd(w.from) && isValidYmd(w.to) && w.from <= w.to) {
+    return { from: w.from, to: w.to };
+  }
+  const today = toYMD(new Date());
+  return {
+    from: isValidYmd(w.from) ? w.from : today,
+    to: isValidYmd(w.to) ? w.to : today,
+  };
 }
 
 /**

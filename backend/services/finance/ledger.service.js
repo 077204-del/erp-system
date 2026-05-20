@@ -88,28 +88,24 @@ function isCashierScope(cashierId) {
   return raw.length > 0 && mongoose.Types.ObjectId.isValid(raw);
 }
 
-function saleDateInRangeClause(range) {
-  const inclusive = { $gte: range.start, $lte: range.end };
-  return { saleDate: inclusive };
-}
-
-/** Cashier KPIs: inclusive saleDate window + createdAt fallback for legacy rows. */
-function cashierSaleDateInRangeClause(range) {
-  const inclusive = { $gte: range.start, $lte: range.end };
+function saleEffectiveDateInRangeClause(range) {
+  const start = range.start;
+  const end = range.end;
   return {
-    $or: [
-      { saleDate: inclusive },
-      {
-        $and: [
-          { $or: [{ saleDate: null }, { saleDate: { $exists: false } }] },
-          { createdAt: inclusive },
-        ],
-      },
-    ],
+    $expr: {
+      $and: [
+        {
+          $gte: [{ $ifNull: ["$saleDate", "$createdAt"] }, start],
+        },
+        {
+          $lte: [{ $ifNull: ["$saleDate", "$createdAt"] }, end],
+        },
+      ],
+    },
   };
 }
 
-function buildSalesFilter(range, cashierId) {
+function buildSalesFilter(range, cashierId, logContext = {}) {
   const base = matchSalesNotVoided();
   const scoped = isCashierScope(cashierId);
   const and = [];
@@ -125,13 +121,20 @@ function buildSalesFilter(range, cashierId) {
   }
 
   if (range) {
-    and.push(
-      scoped ? cashierSaleDateInRangeClause(range) : saleDateInRangeClause(range)
-    );
+    and.push(saleEffectiveDateInRangeClause(range));
   }
 
-  if (!and.length) return base;
-  return { $and: [base, ...and] };
+  const query = !and.length ? base : { $and: [base, ...and] };
+
+  console.log("[buildSalesFilter]", {
+    role: logContext.role ?? (scoped ? "cashier" : "unscoped"),
+    from: logContext.from ?? null,
+    to: logContext.to ?? null,
+    cashierId: scoped ? String(cashierId).trim() : null,
+    query,
+  });
+
+  return query;
 }
 
 /**
@@ -309,8 +312,14 @@ async function fetchPeriodLedgerData(from, to, options = {}) {
       ? new mongoose.Types.ObjectId(cashierRaw)
       : null;
 
+  const salesFilter = buildSalesFilter(range, cashierRaw || undefined, {
+    from,
+    to,
+    role: cashierOid ? "cashier" : "unscoped",
+  });
+
   const [sales, payments] = await Promise.all([
-    Sale.find(buildSalesFilter(range, cashierRaw || undefined))
+    Sale.find(salesFilter)
       .populate("productId", "costPrice")
       .populate("cashierId", "username role")
       .lean(),
@@ -454,7 +463,8 @@ async function getSalesList(from, to, options = {}) {
     range,
     cashierRaw && mongoose.Types.ObjectId.isValid(cashierRaw)
       ? cashierRaw
-      : undefined
+      : undefined,
+    { from, to, role: cashierRaw ? "cashier" : "unscoped" }
   );
 
   return Sale.find(filter)

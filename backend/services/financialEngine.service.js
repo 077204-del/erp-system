@@ -55,6 +55,33 @@ function productCostPrice(sale) {
   return 0;
 }
 
+function isValidYmd(s) {
+  const raw = String(s || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return false;
+  const [y, mo, da] = raw.split("-").map(Number);
+  const dt = new Date(y, mo - 1, da);
+  return (
+    dt.getFullYear() === y &&
+    dt.getMonth() === mo - 1 &&
+    dt.getDate() === da
+  );
+}
+
+/** Coerce query input to YYYY-MM-DD or empty string when not parseable. */
+function normalizeYmdInput(v) {
+  if (v == null) return "";
+  const s = String(v).trim();
+  if (isValidYmd(s)) return s;
+  const prefix = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (prefix && isValidYmd(prefix[1])) return prefix[1];
+  return "";
+}
+
+function orderYmdPair(from, to) {
+  if (from <= to) return { from, to };
+  return { from: to, to: from };
+}
+
 /**
  * Raw period metrics — no role filtering.
  * @param {string} from
@@ -232,16 +259,35 @@ function ledgerOptionsForContext(userRole, userId, filterCashierId) {
   return opts;
 }
 
-/** Cashier: always last full Sat–Fri week; client from/to and single-day queries are ignored. */
 function resolveQueryPeriod(userRole, from, to) {
-  if (resolveUserRole(userRole) === "cashier") {
-    const w = resolveCashierFromTo();
-    if (traceComputeCoreEnabled()) {
-      console.log("[resolveQueryPeriod] cashier lastFullWeek (resolveCashierFromTo)", w);
+  const role = resolveUserRole(userRole);
+  const f = normalizeYmdInput(from);
+  const t = normalizeYmdInput(to);
+
+  let period;
+  if (role === "cashier") {
+    if (f && t && f === t) {
+      period = { from: f, to: t };
+    } else {
+      period = resolveCashierFromTo();
     }
-    return w;
+  } else if (f && t) {
+    period = orderYmdPair(f, t);
+  } else {
+    period = resolveCashierFromTo();
   }
-  return { from, to };
+
+  if (
+    !period ||
+    !isValidYmd(period.from) ||
+    !isValidYmd(period.to)
+  ) {
+    period = resolveCashierFromTo();
+  }
+
+  const resolved = { from: period.from, to: period.to };
+  console.log("[resolveQueryPeriod] resolved", resolved);
+  return resolved;
 }
 
 async function compute(from, to, userRole, ledgerOptions = {}) {
@@ -275,9 +321,9 @@ function legacyStats(core, extras = {}) {
   };
 }
 
-async function buildDashboard(from, to, userRole, attach = {}) {
+async function buildDashboard(from, to, userRole, attach = {}, ledgerOptions = {}) {
   const role = resolveUserRole(userRole);
-  const core = await computeCore(from, to);
+  const core = await computeCore(from, to, ledgerOptions);
   const totalDebt = toNumber(await getTotalOutstandingDebtFromLedger());
 
   let inventoryCapitalValue;
