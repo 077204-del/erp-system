@@ -1,6 +1,6 @@
 /**
- * Cashier date window (server-side): current business week Saturday → Friday (local calendar).
- * Active range: [weekStart, min(today, weekEndFriday)] while the week is in progress.
+ * Cashier business week: Saturday (current week) → today (local calendar).
+ * `weekEnd` is the Friday of that Sat–Fri block (metadata only); active `to` is always today.
  */
 
 function toYMD(d) {
@@ -15,7 +15,7 @@ function isValidYmd(s) {
 }
 
 /**
- * Current business week (Sat–Fri). `to` is capped at today while the week is ongoing.
+ * Current business week: Saturday → today (never future Friday / never Mon–Sun).
  * @param {Date} [now]
  * @returns {{ from: string, to: string, weekStart: string, weekEnd: string }}
  */
@@ -38,12 +38,9 @@ function getCashierWeekRange(now = new Date()) {
   const weekEndFriday = new Date(weekStart);
   weekEndFriday.setDate(weekStart.getDate() + 6);
 
-  const toCap =
-    today.getTime() <= weekEndFriday.getTime() ? today : weekEndFriday;
-
   return {
     from: toYMD(weekStart),
-    to: toYMD(toCap),
+    to: toYMD(today),
     weekStart: toYMD(weekStart),
     weekEnd: toYMD(weekEndFriday),
   };

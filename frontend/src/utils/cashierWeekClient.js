@@ -6,8 +6,11 @@ export function cashierTodayRange(now = new Date()) {
   return { from: today, to: today };
 }
 
-/** Cashier week preset: current week Saturday → today (local calendar). */
-export function cashierSatToTodayRange(now = new Date()) {
+/**
+ * Cashier business week: last Saturday (inclusive) → today (local calendar).
+ * Never extends to future Friday or Sunday-based weeks.
+ */
+export function getCashierWeekRange(now = new Date()) {
   const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const dow = todayDate.getDay();
 
@@ -28,3 +31,6 @@ export function cashierSatToTodayRange(now = new Date()) {
     to: localCalendarYmd(todayDate),
   };
 }
+
+/** @deprecated Use getCashierWeekRange */
+export const cashierSatToTodayRange = getCashierWeekRange;

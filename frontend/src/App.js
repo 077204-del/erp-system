@@ -12,8 +12,8 @@ import { freshGetConfig, workspaceGetParams } from "./config/apiRequest";
 import { mapDashboardApiToState } from "./utils/dashboardFinance";
 import { normalizeRoleClient } from "./utils/rbacClient";
 import {
-  cashierSatToTodayRange,
   cashierTodayRange,
+  getCashierWeekRange,
 } from "./utils/cashierWeekClient";
 import { purgeApiCachesOnBoot } from "./offline/responseCache";
 import CashClosingView from "./views/CashClosingView";
@@ -103,7 +103,7 @@ function initialRangeForRole() {
   try {
     const u = readStoredUserWithJwtSync();
     if (String(u?.role || "").toLowerCase() === "cashier") {
-      return cashierSatToTodayRange();
+      return getCashierWeekRange();
     }
   } catch {
     /* ignore */
@@ -317,7 +317,7 @@ function MainWorkspace({ setToken, reportLoading }) {
   };
 
   const applyCashierWeek = () => {
-    const { from: f, to: t } = cashierSatToTodayRange();
+    const { from: f, to: t } = getCashierWeekRange();
     setFrom(f);
     setTo(t);
     fetchAll(f, t);
@@ -420,7 +420,7 @@ function MainWorkspace({ setToken, reportLoading }) {
 
   const handleReset = () => {
     if (isCashier) {
-      const w = cashierSatToTodayRange();
+      const w = getCashierWeekRange();
       setFrom(w.from);
       setTo(w.to);
       setWorkspaceCashierId("");
@@ -505,8 +505,7 @@ function MainWorkspace({ setToken, reportLoading }) {
           dashboardMeta={dashboardMeta}
           canViewFinancial={canViewFinancialKpis}
           isAdmin={apiRole === "admin"}
-          isCashier={apiRole === "cashier"}
-          hideDateFilters={isCashier || apiRole === "cashier"}
+          isCashier={isCashier || apiRole === "cashier"}
           onCashierToday={applyCashierToday}
           onCashierWeek={applyCashierWeek}
           cashierWeeklyBreakdown={cashierWeeklyBreakdown}
@@ -531,7 +530,7 @@ function MainWorkspace({ setToken, reportLoading }) {
           canEditSales={canEditSales}
           canVoidSales={canVoidSales}
           showCashierFilter={isAdmin}
-          hideDateFilters={isCashier || apiRole === "cashier"}
+          isCashier={isCashier || apiRole === "cashier"}
           cashiers={saleCashiers}
           cashierId={workspaceCashierId}
           onCashierChange={(id) => {

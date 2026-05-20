@@ -56,7 +56,6 @@ export function DashboardView({
   canViewFinancial = false,
   isAdmin = false,
   isCashier = false,
-  hideDateFilters = false,
   onCashierToday,
   onCashierWeek,
   cashierWeeklyBreakdown = null,
@@ -103,7 +102,7 @@ export function DashboardView({
           </p>
         </div>
       ) : null}
-      {hideDateFilters ? (
+      {isCashier ? (
         <section
           className="erp-page-toolbar"
           aria-label={t("dashboard.period")}
@@ -439,7 +438,7 @@ export function SalesView({
   canEditSales = false,
   canVoidSales = false,
   showCashierFilter = false,
-  hideDateFilters = false,
+  isCashier = false,
   cashiers = [],
   cashierId = "",
   onCashierChange,
@@ -594,7 +593,7 @@ export function SalesView({
 
   return (
     <section className="erp-section erp-section-flush-top erp-sales-module erp-sales-view-shell">
-      {typeof onApplySalesRange === "function" && !hideDateFilters ? (
+      {typeof onApplySalesRange === "function" && !isCashier ? (
         <section
           className="erp-page-toolbar"
           aria-label={t("dashboard.period")}
