@@ -246,6 +246,9 @@ try {
       );
       const httpServer = app.listen(PORT, HOST, () => {
         console.log(`[ERP BOOT] after app.listen (listening) ${HOST}:${PORT}`);
+        console.log(
+          "[DEPLOY TRIGGER] ERP backend deployed successfully - build updated"
+        );
         warnIfDeprecatedFinanceServiceLoaded();
         console.log(`Server running on ${HOST}:${PORT}`);
         let publicHint =
