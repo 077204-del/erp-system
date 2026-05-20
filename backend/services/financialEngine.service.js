@@ -287,25 +287,28 @@ function ledgerOptionsForContext(userRole, userId, filterCashierId) {
 
 function resolveQueryPeriod(userRole, from, to) {
   const role = resolveUserRole(userRole);
+  const f = normalizeYmdInput(from);
+  const t = normalizeYmdInput(to);
 
   let period;
   if (role === "cashier") {
-    period = resolveCashierFromTo();
-  } else {
-    const f = normalizeYmdInput(from);
-    const t = normalizeYmdInput(to);
-    if (f && t) {
-      period = orderYmdPair(f, t);
+    if (f && t && f === t) {
+      period = { from: f, to: t };
     } else {
       period = resolveCashierFromTo();
     }
-    if (
-      !period ||
-      !isValidYmd(period.from) ||
-      !isValidYmd(period.to)
-    ) {
-      period = resolveCashierFromTo();
-    }
+  } else if (f && t) {
+    period = orderYmdPair(f, t);
+  } else {
+    period = resolveCashierFromTo();
+  }
+
+  if (
+    !period ||
+    !isValidYmd(period.from) ||
+    !isValidYmd(period.to)
+  ) {
+    period = resolveCashierFromTo();
   }
 
   const resolved = ensureValidPeriodOutput(period);
