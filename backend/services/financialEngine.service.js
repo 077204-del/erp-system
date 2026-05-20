@@ -292,7 +292,13 @@ function resolveQueryPeriod(userRole, from, to) {
 
   let period;
   if (role === "cashier") {
-    period = resolveCashierFromTo();
+    if (f && t && f === t) {
+      period = { from: f, to: t };
+    } else if (f && t) {
+      period = orderYmdPair(f, t);
+    } else {
+      period = resolveCashierFromTo();
+    }
   } else if (f && t) {
     period = orderYmdPair(f, t);
   } else {

@@ -11,6 +11,10 @@ import { apiErrorMessage } from "./utils/erpFormat";
 import { freshGetConfig, workspaceGetParams } from "./config/apiRequest";
 import { mapDashboardApiToState } from "./utils/dashboardFinance";
 import { normalizeRoleClient } from "./utils/rbacClient";
+import {
+  cashierSatToTodayRange,
+  cashierTodayRange,
+} from "./utils/cashierWeekClient";
 import { purgeApiCachesOnBoot } from "./offline/responseCache";
 import CashClosingView from "./views/CashClosingView";
 import ClientDebtView from "./views/ClientDebtView";
@@ -99,7 +103,7 @@ function initialRangeForRole() {
   try {
     const u = readStoredUserWithJwtSync();
     if (String(u?.role || "").toLowerCase() === "cashier") {
-      return { from: "", to: "" };
+      return cashierSatToTodayRange();
     }
   } catch {
     /* ignore */
@@ -107,11 +111,13 @@ function initialRangeForRole() {
   return { from: "2020-01-01", to: "2030-01-01" };
 }
 
-function workspaceRangeParams(isCashierRole, fromDate, toDate) {
-  if (isCashierRole) {
-    return workspaceGetParams();
+function workspaceRangeParams(fromDate, toDate) {
+  const f = String(fromDate ?? "").trim();
+  const t = String(toDate ?? "").trim();
+  if (f && t) {
+    return workspaceGetParams({ from: f, to: t });
   }
-  return workspaceGetParams({ from: fromDate, to: toDate });
+  return workspaceGetParams();
 }
 
 function MainWorkspace({ setToken, reportLoading }) {
@@ -223,7 +229,7 @@ function MainWorkspace({ setToken, reportLoading }) {
       opts && Object.prototype.hasOwnProperty.call(opts, "cashierId")
         ? opts.cashierId
         : workspaceCashierId;
-    const salesParams = workspaceRangeParams(isCashier, fromDate, toDate);
+    const salesParams = workspaceRangeParams(fromDate, toDate);
     if (
       cashierForSales &&
       isAdmin &&
@@ -231,7 +237,7 @@ function MainWorkspace({ setToken, reportLoading }) {
     ) {
       salesParams.cashierId = cashierForSales;
     }
-    const rangeParams = workspaceRangeParams(isCashier, fromDate, toDate);
+    const rangeParams = workspaceRangeParams(fromDate, toDate);
     const [dashR, salesR, prodR, cliR, payR] = await Promise.allSettled([
       api.get("/api/dashboard", { ...fresh, params: rangeParams }),
       api.get("/api/sales", { ...fresh, params: salesParams }),
@@ -301,7 +307,21 @@ function MainWorkspace({ setToken, reportLoading }) {
     setFetchError(errs.filter(Boolean).join(" · "));
     setInitialSyncDone(true);
     setLoading(false);
-  }, [workspaceCashierId, isAdmin, isCashier]);
+  }, [workspaceCashierId, isAdmin]);
+
+  const applyCashierToday = () => {
+    const { from: f, to: t } = cashierTodayRange();
+    setFrom(f);
+    setTo(t);
+    fetchAll(f, t);
+  };
+
+  const applyCashierWeek = () => {
+    const { from: f, to: t } = cashierSatToTodayRange();
+    setFrom(f);
+    setTo(t);
+    fetchAll(f, t);
+  };
 
   useEffect(() => {
     if (initialFetchRef.current) return;
@@ -400,10 +420,11 @@ function MainWorkspace({ setToken, reportLoading }) {
 
   const handleReset = () => {
     if (isCashier) {
-      setFrom("");
-      setTo("");
+      const w = cashierSatToTodayRange();
+      setFrom(w.from);
+      setTo(w.to);
       setWorkspaceCashierId("");
-      fetchAll("", "", { cashierId: "" });
+      fetchAll(w.from, w.to, { cashierId: "" });
       return;
     }
     setFrom("2020-01-01");
@@ -486,6 +507,8 @@ function MainWorkspace({ setToken, reportLoading }) {
           isAdmin={apiRole === "admin"}
           isCashier={apiRole === "cashier"}
           hideDateFilters={isCashier || apiRole === "cashier"}
+          onCashierToday={applyCashierToday}
+          onCashierWeek={applyCashierWeek}
           cashierWeeklyBreakdown={cashierWeeklyBreakdown}
         />
       ) : null}

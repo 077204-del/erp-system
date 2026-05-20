@@ -57,6 +57,8 @@ export function DashboardView({
   isAdmin = false,
   isCashier = false,
   hideDateFilters = false,
+  onCashierToday,
+  onCashierWeek,
   cashierWeeklyBreakdown = null,
 }) {
   const metaRole = dashboardMeta?.role;
@@ -101,7 +103,35 @@ export function DashboardView({
           </p>
         </div>
       ) : null}
-      {!hideDateFilters ? (
+      {hideDateFilters ? (
+        <section
+          className="erp-page-toolbar"
+          aria-label={t("dashboard.period")}
+        >
+          <div className="erp-btn-row">
+            <button
+              type="button"
+              className="erp-btn erp-btn-primary erp-btn-sm"
+              onClick={() =>
+                typeof onCashierToday === "function" && onCashierToday()
+              }
+              disabled={loading}
+            >
+              {t("dashboard.presetToday")}
+            </button>
+            <button
+              type="button"
+              className="erp-btn erp-btn-ghost erp-btn-sm"
+              onClick={() =>
+                typeof onCashierWeek === "function" && onCashierWeek()
+              }
+              disabled={loading}
+            >
+              {t("dashboard.cashierPresetWeek")}
+            </button>
+          </div>
+        </section>
+      ) : (
       <section className="erp-page-toolbar" aria-label={t("dashboard.period")}>
         <div className="erp-filter erp-filter--inline">
           <div className="erp-field">
@@ -162,7 +192,7 @@ export function DashboardView({
           </div>
         </div>
       </section>
-      ) : null}
+      )}
 
       <section className="erp-section" aria-label={t("dashboard.performance")}>
         <h2 className="erp-section-title">{t("dashboard.performance")}</h2>

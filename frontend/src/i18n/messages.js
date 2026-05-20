@@ -449,6 +449,7 @@ export const messages = {
       totalCashInHint: "النقد الوارد من المبيعات والمدفوعات — دون خصم المصروفات",
       presetToday: "اليوم",
       presetWeek: "هذا الأسبوع",
+      cashierPresetWeek: "الأسبوع (سبت → اليوم)",
       cashierPerfTitle: "أداء الكاشير (الفترة المحددة)",
       cashierPerfLead:
         "إجمالي المبيعات وعددها ومدفوعات المبيعات المرتبطة بنفس الفترة — للمسؤول فقط.",
@@ -993,6 +994,7 @@ export const messages = {
       totalCashInHint: "Encaissements — sans déduction des dépenses",
       presetToday: "Aujourd'hui",
       presetWeek: "Cette semaine",
+      cashierPresetWeek: "Semaine (sam. → aujourd'hui)",
       cashierPerfTitle: "Performance caissiers (période)",
       cashierPerfLead:
         "Totaux ventes, volumes, encaissements liés aux ventes — admin uniquement.",
@@ -1499,6 +1501,7 @@ export const messages = {
       salesCountSuffix: "sales count",
       presetToday: "Today",
       presetWeek: "This week",
+      cashierPresetWeek: "Week (Sat → Today)",
       cashierFilter: "Cashier",
       allCashiers: "All cashiers",
       applyDates: "Apply dates",
@@ -1547,6 +1550,7 @@ export const messages = {
       totalCashInHint: "Cash collected in period — not reduced by expenses",
       presetToday: "Today",
       presetWeek: "This week",
+      cashierPresetWeek: "Week (Sat → Today)",
       cashierPerfTitle: "Cashier performance (selected range)",
       cashierPerfLead:
         "Per-cashier revenue, sale counts, invoice-line debt snapshot, and sale-linked payments in range — admin only.",
