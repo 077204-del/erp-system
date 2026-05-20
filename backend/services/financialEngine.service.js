@@ -90,6 +90,24 @@ function hostLocalTodayYmd() {
   return `${y}-${m}-${day}`;
 }
 
+/** Missing/invalid YMD → local today (YYYY-MM-DD). */
+function normalizeYmdOrToday(v) {
+  const n = normalizeYmdInput(v);
+  return n || hostLocalTodayYmd();
+}
+
+/** Final safety: always return valid inclusive YYYY-MM-DD pair. */
+function ensureValidPeriodOutput(period) {
+  let f = normalizeYmdOrToday(period && period.from);
+  let t = normalizeYmdOrToday(period && period.to);
+  if (f > t) {
+    const swap = f;
+    f = t;
+    t = swap;
+  }
+  return { from: f, to: t };
+}
+
 /**
  * Raw period metrics — no role filtering.
  * @param {string} from
@@ -273,14 +291,6 @@ function resolveQueryPeriod(userRole, from, to) {
   let period;
   if (role === "cashier") {
     period = resolveCashierFromTo();
-    if (
-      !period ||
-      !isValidYmd(period.from) ||
-      !isValidYmd(period.to)
-    ) {
-      const today = hostLocalTodayYmd();
-      period = { from: today, to: today };
-    }
   } else {
     const f = normalizeYmdInput(from);
     const t = normalizeYmdInput(to);
@@ -298,10 +308,7 @@ function resolveQueryPeriod(userRole, from, to) {
     }
   }
 
-  const resolved = {
-    from: String(period.from),
-    to: String(period.to),
-  };
+  const resolved = ensureValidPeriodOutput(period);
   console.log("[resolveQueryPeriod] resolved", resolved);
   return resolved;
 }
