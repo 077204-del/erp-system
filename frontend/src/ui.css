@@ -1817,6 +1817,35 @@ select option {
   border-left: 4px solid var(--erp-warning, #b45309);
 }
 
+.erp-cashier-period-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.erp-cashier-period-btns button {
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  border-radius: var(--erp-radius-sm, 8px);
+  border: 1px solid var(--erp-border, #cbd5e1);
+  background: var(--erp-surface, #fff);
+  color: var(--erp-text, #0f172a);
+  font: inherit;
+  cursor: pointer;
+}
+
+.erp-cashier-period-btns button:first-child {
+  background: var(--erp-primary, #2563eb);
+  border-color: var(--erp-primary, #2563eb);
+  color: #fff;
+}
+
+.erp-cashier-period-btns button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .erp-perm-grid {
   display: grid;
   gap: 0.5rem 1rem;

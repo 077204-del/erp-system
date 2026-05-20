@@ -15,6 +15,7 @@ import {
   cashierTodayRange,
   getCashierWeekRange,
 } from "./utils/cashierWeekClient";
+import { localCalendarYmd } from "./utils/localCalendarYmd";
 import { purgeApiCachesOnBoot } from "./offline/responseCache";
 import CashClosingView from "./views/CashClosingView";
 import ClientDebtView from "./views/ClientDebtView";
@@ -103,7 +104,8 @@ function initialRangeForRole() {
   try {
     const u = readStoredUserWithJwtSync();
     if (String(u?.role || "").toLowerCase() === "cashier") {
-      return getCashierWeekRange();
+      const today = localCalendarYmd(new Date());
+      return getCashierWeekRange(today);
     }
   } catch {
     /* ignore */
@@ -152,6 +154,7 @@ function MainWorkspace({ setToken, reportLoading }) {
   const rangeInit = initialRangeForRole();
   const [from, setFrom] = useState(rangeInit.from);
   const [to, setTo] = useState(rangeInit.to);
+  const [cashierPreset, setCashierPreset] = useState("week");
 
   const initialFetchRef = useRef(false);
   const storedUser = readStoredUserWithJwtSync();
@@ -193,13 +196,6 @@ function MainWorkspace({ setToken, reportLoading }) {
   useEffect(() => {
     purgeApiCachesOnBoot();
   }, []);
-
-  useEffect(() => {
-    if (isCashier) {
-      // eslint-disable-next-line no-console
-      console.log("[CASHIER WEEK MODE ACTIVE]");
-    }
-  }, [isCashier]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -309,25 +305,44 @@ function MainWorkspace({ setToken, reportLoading }) {
     setLoading(false);
   }, [workspaceCashierId, isAdmin]);
 
-  const applyCashierToday = () => {
-    const { from: f, to: t } = cashierTodayRange();
+  const loadToday = useCallback(() => {
+    const { from: f, to: t } = cashierTodayRange(new Date());
+    setCashierPreset("today");
     setFrom(f);
     setTo(t);
     fetchAll(f, t);
-  };
+  }, [fetchAll]);
 
-  const applyCashierWeek = () => {
-    const { from: f, to: t } = getCashierWeekRange();
+  const loadWeek = useCallback(() => {
+    const today = localCalendarYmd(new Date());
+    const { from: f, to: t } = getCashierWeekRange(today);
+    setCashierPreset("week");
     setFrom(f);
     setTo(t);
     fetchAll(f, t);
-  };
+  }, [fetchAll]);
+
+  const refreshWorkspaceData = useCallback(() => {
+    if (isCashier) {
+      if (cashierPreset === "today") {
+        loadToday();
+      } else {
+        loadWeek();
+      }
+      return;
+    }
+    fetchAll(from, to);
+  }, [isCashier, cashierPreset, loadToday, loadWeek, fetchAll, from, to]);
 
   useEffect(() => {
     if (initialFetchRef.current) return;
     initialFetchRef.current = true;
+    if (isCashier) {
+      loadWeek();
+      return;
+    }
     fetchAll(from, to);
-  }, [fetchAll, from, to]);
+  }, [fetchAll, from, to, isCashier, loadWeek]);
 
   useEffect(() => {
     const onQueued = () => {
@@ -335,7 +350,7 @@ function MainWorkspace({ setToken, reportLoading }) {
     };
     const onSynced = () => {
       toast.success(t("app.offlineSynced"));
-      fetchAll(from, to);
+      refreshWorkspaceData();
     };
     window.addEventListener("erp:offline-queued", onQueued);
     window.addEventListener("erp:offline-synced", onSynced);
@@ -343,7 +358,7 @@ function MainWorkspace({ setToken, reportLoading }) {
       window.removeEventListener("erp:offline-queued", onQueued);
       window.removeEventListener("erp:offline-synced", onSynced);
     };
-  }, [fetchAll, from, to, toast, t]);
+  }, [toast, t, refreshWorkspaceData]);
 
   useEffect(() => {
     const onAuthLost = () => {
@@ -395,10 +410,22 @@ function MainWorkspace({ setToken, reportLoading }) {
     canManageExpenses,
   ]);
 
-  const handleApply = () => fetchAll(from, to);
+  const handleApply = () => {
+    if (isCashier) {
+      if (cashierPreset === "today") loadToday();
+      else loadWeek();
+      return;
+    }
+    fetchAll(from, to);
+  };
 
   const applyReportPreset = (key) => {
-    const today = new Date().toISOString().slice(0, 10);
+    if (isCashier) {
+      if (key === "today") loadToday();
+      else if (key === "week") loadWeek();
+      return;
+    }
+    const today = localCalendarYmd(new Date());
     if (key === "today") {
       setFrom(today);
       setTo(today);
@@ -409,9 +436,9 @@ function MainWorkspace({ setToken, reportLoading }) {
       const d = new Date(`${today}T12:00:00`);
       const dow = (d.getDay() + 6) % 7;
       d.setDate(d.getDate() - dow);
-      const start = d.toISOString().slice(0, 10);
+      const start = localCalendarYmd(d);
       d.setDate(d.getDate() + 6);
-      const end = d.toISOString().slice(0, 10);
+      const end = localCalendarYmd(d);
       setFrom(start);
       setTo(end);
       fetchAll(start, end);
@@ -420,11 +447,8 @@ function MainWorkspace({ setToken, reportLoading }) {
 
   const handleReset = () => {
     if (isCashier) {
-      const w = getCashierWeekRange();
-      setFrom(w.from);
-      setTo(w.to);
       setWorkspaceCashierId("");
-      fetchAll(w.from, w.to, { cashierId: "" });
+      loadWeek();
       return;
     }
     setFrom("2020-01-01");
@@ -481,7 +505,7 @@ function MainWorkspace({ setToken, reportLoading }) {
         <button
           type="button"
           className="erp-btn erp-btn-ghost erp-btn-sm"
-          onClick={() => fetchAll(from, to)}
+          onClick={refreshWorkspaceData}
           disabled={loading}
         >
           {t("app.refreshData")}
@@ -495,20 +519,20 @@ function MainWorkspace({ setToken, reportLoading }) {
           dashboard={dashboard}
           cash={cash}
           products={products}
-          from={from}
-          to={to}
-          onFromChange={setFrom}
-          onToChange={setTo}
-          onApply={handleApply}
-          onReset={handleReset}
-          onPreset={applyReportPreset}
+          role={apiRole || roleLower}
           dashboardMeta={dashboardMeta}
           canViewFinancial={canViewFinancialKpis}
           isAdmin={apiRole === "admin"}
-          isCashier={isCashier || apiRole === "cashier"}
-          onCashierToday={applyCashierToday}
-          onCashierWeek={applyCashierWeek}
+          loadToday={loadToday}
+          loadWeek={loadWeek}
           cashierWeeklyBreakdown={cashierWeeklyBreakdown}
+          from={from}
+          to={to}
+          onFromChange={isCashier ? undefined : setFrom}
+          onToChange={isCashier ? undefined : setTo}
+          onApply={handleApply}
+          onReset={handleReset}
+          onPreset={applyReportPreset}
         />
       ) : null}
 

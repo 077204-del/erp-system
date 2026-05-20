@@ -45,25 +45,28 @@ export function DashboardView({
   dashboard,
   cash,
   products,
-  from,
-  to,
+  role = "",
+  dashboardMeta = {},
+  canViewFinancial = false,
+  isAdmin = false,
+  loadToday,
+  loadWeek,
+  cashierWeeklyBreakdown = null,
+  from = "",
+  to = "",
   onFromChange,
   onToChange,
   onApply,
   onReset,
   onPreset,
-  dashboardMeta = {},
-  canViewFinancial = false,
-  isAdmin = false,
-  isCashier = false,
-  onCashierToday,
-  onCashierWeek,
-  cashierWeeklyBreakdown = null,
 }) {
-  const metaRole = dashboardMeta?.role;
+  const roleLower = String(role || dashboardMeta?.role || "")
+    .trim()
+    .toLowerCase();
+  const isCashierRole = roleLower === "cashier";
   const showFinancial =
     canViewFinancial === true &&
-    (metaRole === "admin" || metaRole === "manager");
+    (roleLower === "admin" || roleLower === "manager");
   const { t } = useLocale();
   const showKpiSkeleton = loading && !initialSyncDone;
   const totalSalesKpi = safeNum(dashboard?.totalSales, 0);
@@ -102,34 +105,15 @@ export function DashboardView({
           </p>
         </div>
       ) : null}
-      {isCashier ? (
-        <section
-          className="erp-page-toolbar"
-          aria-label={t("dashboard.period")}
-        >
-          <div className="erp-btn-row">
-            <button
-              type="button"
-              className="erp-btn erp-btn-primary erp-btn-sm"
-              onClick={() =>
-                typeof onCashierToday === "function" && onCashierToday()
-              }
-              disabled={loading}
-            >
-              {t("dashboard.presetToday")}
-            </button>
-            <button
-              type="button"
-              className="erp-btn erp-btn-ghost erp-btn-sm"
-              onClick={() =>
-                typeof onCashierWeek === "function" && onCashierWeek()
-              }
-              disabled={loading}
-            >
-              {t("dashboard.presetWeek")}
-            </button>
-          </div>
-        </section>
+      {isCashierRole ? (
+        <div className="erp-cashier-period-btns">
+          <button type="button" onClick={loadToday}>
+            Today
+          </button>
+          <button type="button" onClick={loadWeek}>
+            This Week
+          </button>
+        </div>
       ) : (
       <section className="erp-page-toolbar" aria-label={t("dashboard.period")}>
         <div className="erp-filter erp-filter--inline">
@@ -234,7 +218,7 @@ export function DashboardView({
                   tone="amber"
                 />
               ) : null}
-              {isCashier &&
+              {isCashierRole &&
               dashboard?.cashIn != null &&
               Number.isFinite(Number(dashboard.cashIn)) ? (
                 <KpiCard

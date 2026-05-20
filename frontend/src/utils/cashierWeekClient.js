@@ -1,36 +1,63 @@
 import { localCalendarYmd } from "./localCalendarYmd";
 
+/** Parse YYYY-MM-DD or Date as local calendar noon (avoids UTC drift). */
+function parseLocalCalendarDate(input) {
+  if (input instanceof Date && !Number.isNaN(input.getTime())) {
+    return new Date(
+      input.getFullYear(),
+      input.getMonth(),
+      input.getDate(),
+      12,
+      0,
+      0,
+      0
+    );
+  }
+  const s = String(input ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y, m, d] = s.split("-").map(Number);
+    return new Date(y, m - 1, d, 12, 0, 0, 0);
+  }
+  const fallback = new Date(input);
+  if (Number.isNaN(fallback.getTime())) {
+    return new Date();
+  }
+  return new Date(
+    fallback.getFullYear(),
+    fallback.getMonth(),
+    fallback.getDate(),
+    12,
+    0,
+    0,
+    0
+  );
+}
+
 /** Cashier "Today" preset — local calendar YYYY-MM-DD. */
 export function cashierTodayRange(now = new Date()) {
-  const today = localCalendarYmd(now);
+  const today =
+    typeof now === "string" && /^\d{4}-\d{2}-\d{2}$/.test(now.trim())
+      ? now.trim()
+      : localCalendarYmd(parseLocalCalendarDate(now));
   return { from: today, to: today };
 }
 
 /**
- * Cashier business week: last Saturday (inclusive) → today (local calendar).
- * Never extends to future Friday or Sunday-based weeks.
+ * Cashier week: Saturday (inclusive) → today (local calendar). Never ISO/Mon–Sun week.
+ * @param {Date|string} date
  */
-export function getCashierWeekRange(now = new Date()) {
-  const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const dow = todayDate.getDay();
-
-  let daysBack;
-  if (dow === 6) {
-    daysBack = 0;
-  } else if (dow === 0) {
-    daysBack = 1;
-  } else {
-    daysBack = dow + 1;
-  }
-
-  const weekStart = new Date(todayDate);
-  weekStart.setDate(todayDate.getDate() - daysBack);
-
+export function getCashierWeekRange(date) {
+  const d = parseLocalCalendarDate(date ?? new Date());
+  const day = d.getDay();
+  const diffToSaturday = (day + 1) % 7;
+  const saturday = new Date(d);
+  saturday.setDate(d.getDate() - diffToSaturday);
+  const toYmd =
+    typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(String(date).trim())
+      ? String(date).trim()
+      : localCalendarYmd(d);
   return {
-    from: localCalendarYmd(weekStart),
-    to: localCalendarYmd(todayDate),
+    from: localCalendarYmd(saturday),
+    to: toYmd,
   };
 }
-
-/** @deprecated Use getCashierWeekRange */
-export const cashierSatToTodayRange = getCashierWeekRange;
