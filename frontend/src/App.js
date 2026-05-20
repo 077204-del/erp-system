@@ -523,8 +523,6 @@ function MainWorkspace({ setToken, reportLoading }) {
           dashboardMeta={dashboardMeta}
           canViewFinancial={canViewFinancialKpis}
           isAdmin={apiRole === "admin"}
-          loadToday={loadToday}
-          loadWeek={loadWeek}
           cashierWeeklyBreakdown={cashierWeeklyBreakdown}
           from={from}
           to={to}

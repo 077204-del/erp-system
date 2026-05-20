@@ -49,8 +49,6 @@ export function DashboardView({
   dashboardMeta = {},
   canViewFinancial = false,
   isAdmin = false,
-  loadToday,
-  loadWeek,
   cashierWeeklyBreakdown = null,
   from = "",
   to = "",
@@ -105,16 +103,7 @@ export function DashboardView({
           </p>
         </div>
       ) : null}
-      {isCashierRole ? (
-        <div className="erp-cashier-period-btns">
-          <button type="button" onClick={loadToday}>
-            Today
-          </button>
-          <button type="button" onClick={loadWeek}>
-            This Week
-          </button>
-        </div>
-      ) : (
+      {roleLower !== "cashier" ? (
       <section className="erp-page-toolbar" aria-label={t("dashboard.period")}>
         <div className="erp-filter erp-filter--inline">
           <div className="erp-field">
@@ -175,7 +164,7 @@ export function DashboardView({
           </div>
         </div>
       </section>
-      )}
+      ) : null}
 
       <section className="erp-section" aria-label={t("dashboard.performance")}>
         <h2 className="erp-section-title">{t("dashboard.performance")}</h2>
