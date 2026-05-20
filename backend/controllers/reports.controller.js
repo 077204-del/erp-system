@@ -54,10 +54,13 @@ exports.getReports = async (req, res) => {
   try {
     const { from, to, cashierId } = req.query;
     const today = new Date().toISOString().slice(0, 10);
-    let f = safeString(from, "") || today;
-    let t = safeString(to, "") || f;
 
     const role = normalizeRole(req.user && req.user.role ? req.user.role : "");
+    let f = safeString(from, "") || today;
+    let t = safeString(to, "") || f;
+    const period = financialEngine.resolveQueryPeriod(role, f, t);
+    f = period.from;
+    t = period.to;
     const canFilterByCashier = role === "admin";
     const rawCid = cashierId != null ? String(cashierId).trim() : "";
     let listOpts = {};
@@ -137,6 +140,7 @@ exports.getReports = async (req, res) => {
       topClients,
       cashVsCredit: cashVsCreditFromSalesList(sales),
       cashierId: reportCashierId || undefined,
+      sessionUserId: req.user && req.user.id,
     });
 
     let cashiers = [];

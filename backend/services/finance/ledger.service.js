@@ -4,6 +4,7 @@ const Payment = require("../../models/payment.model");
 const Client = require("../../models/client.model");
 const Product = require("../../models/product.model");
 const User = require("../../models/user.model");
+const { rangeBoundsUTC } = require("../expenseQuery.service");
 
 function toNumber(value) {
   const n = Number(value);
@@ -11,46 +12,89 @@ function toNumber(value) {
   return n;
 }
 
+/**
+ * Inclusive local-calendar range for saleDate / payment effective dates.
+ * YYYY-MM-DD uses startOfDay(from) … endOfDay(to) — not UTC midnight from Date.parse.
+ */
 function getDateRange(from, to) {
   if (!from || !to) return null;
 
-  let a = new Date(from);
-  let b = new Date(to);
-  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) {
+  const fromStr = String(from).trim();
+  const toStr = String(to).trim();
+  const ymdBounds = rangeBoundsUTC(fromStr, toStr);
+  if (ymdBounds) {
+    return ymdBounds;
+  }
+
+  let start = new Date(from);
+  let end = new Date(to);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     return null;
   }
-  if (a > b) {
-    const t = a;
-    a = b;
-    b = t;
+  if (start > end) {
+    const t = start;
+    start = end;
+    end = t;
   }
-  a.setHours(0, 0, 0, 0);
-  b.setHours(23, 59, 59, 999);
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
 
-  return { start: a, end: b };
+  return { start, end };
 }
 
 function matchSalesNotVoided() {
   return { voided: { $ne: true } };
 }
 
+function isCashierScope(cashierId) {
+  const raw = cashierId != null ? String(cashierId).trim() : "";
+  return raw.length > 0 && mongoose.Types.ObjectId.isValid(raw);
+}
+
+function saleDateInRangeClause(range) {
+  const inclusive = { $gte: range.start, $lte: range.end };
+  return { saleDate: inclusive };
+}
+
+/** Cashier KPIs: inclusive saleDate window + createdAt fallback for legacy rows. */
+function cashierSaleDateInRangeClause(range) {
+  const inclusive = { $gte: range.start, $lte: range.end };
+  return {
+    $or: [
+      { saleDate: inclusive },
+      {
+        $and: [
+          { $or: [{ saleDate: null }, { saleDate: { $exists: false } }] },
+          { createdAt: inclusive },
+        ],
+      },
+    ],
+  };
+}
+
 function buildSalesFilter(range, cashierId) {
   const base = matchSalesNotVoided();
-  if (
-    cashierId != null &&
-    String(cashierId).trim() &&
-    mongoose.Types.ObjectId.isValid(String(cashierId).trim())
-  ) {
-    base.cashierId = new mongoose.Types.ObjectId(String(cashierId).trim());
+  const scoped = isCashierScope(cashierId);
+  const and = [];
+
+  if (scoped) {
+    const raw = String(cashierId).trim();
+    and.push({
+      $or: [
+        { cashierId: new mongoose.Types.ObjectId(raw) },
+        { cashierId: raw },
+      ],
+    });
   }
-  if (!range) return base;
-  return {
-    ...base,
-    saleDate: {
-      $gte: range.start,
-      $lte: range.end,
-    },
-  };
+
+  if (range) {
+    and.push(
+      scoped ? cashierSaleDateInRangeClause(range) : saleDateInRangeClause(range)
+    );
+  }
+
+  if (!and.length) return base;
+  return { $and: [base, ...and] };
 }
 
 /**
@@ -77,28 +121,69 @@ async function fetchPaymentsInDashboardRange(range) {
 /**
  * Payments in range tied to sales recorded by a given cashier (sale.cashierId).
  * Omits payments with no saleId or voided / mismatched sale.
+ *
+ * Uses $lookup + $expr (not localField/foreignField + BSON equality) so cashier-scoped
+ * payments still match when legacy docs store saleId/cashierId as strings or mixed types.
  */
 async function fetchPaymentsInDashboardRangeForCashier(range, cashierOid) {
   const oid =
     cashierOid instanceof mongoose.Types.ObjectId
       ? cashierOid
       : new mongoose.Types.ObjectId(String(cashierOid));
+  const oidStr = String(oid);
+
+  const saleJoinPipeline = [
+    {
+      $match: {
+        $expr: {
+          $and: [
+            {
+              $or: [
+                { $eq: ["$_id", "$$sid"] },
+                {
+                  $eq: [
+                    { $toString: "$_id" },
+                    { $toString: { $ifNull: ["$$sid", ""] } },
+                  ],
+                },
+              ],
+            },
+            { $ne: ["$voided", true] },
+            {
+              $or: [
+                { $eq: ["$cashierId", oid] },
+                {
+                  $eq: [
+                    { $toString: { $ifNull: ["$cashierId", ""] } },
+                    oidStr,
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  ];
+
+  const saleIdPresent = {
+    saleId: { $exists: true, $nin: [null, ""] },
+  };
 
   if (!range) {
     return Payment.aggregate([
+      { $match: saleIdPresent },
       {
         $lookup: {
           from: "sales",
-          localField: "saleId",
-          foreignField: "_id",
+          let: { sid: "$saleId" },
+          pipeline: saleJoinPipeline,
           as: "_sale",
         },
       },
       {
         $match: {
           "_sale.0": { $exists: true },
-          "_sale.0.voided": { $ne: true },
-          "_sale.0.cashierId": oid,
         },
       },
       { $project: { _sale: 0 } },
@@ -114,21 +199,20 @@ async function fetchPaymentsInDashboardRangeForCashier(range, cashierOid) {
     {
       $match: {
         _eff: { $gte: range.start, $lte: range.end },
+        ...saleIdPresent,
       },
     },
     {
       $lookup: {
         from: "sales",
-        localField: "saleId",
-        foreignField: "_id",
+        let: { sid: "$saleId" },
+        pipeline: saleJoinPipeline,
         as: "_sale",
       },
     },
     {
       $match: {
         "_sale.0": { $exists: true },
-        "_sale.0.voided": { $ne: true },
-        "_sale.0.cashierId": oid,
       },
     },
     { $project: { _sale: 0 } },

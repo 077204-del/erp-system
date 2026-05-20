@@ -6,16 +6,24 @@
  * grossProfit = revenue - cost
  * expenses = Σ expenses in range
  * netProfit = grossProfit - expenses
- * cashIn = Σ payment.amount (expenses do NOT reduce cashIn)
+ * cashIn = Σ payment.amount + orphan gap (sale.paidAmount − summed payments per sale).
+ * Cashier sessions may restrict the orphan term to CASH-method lines only (see ledgerOptions).
+ * netCashFlow = cashIn (legacy alias only; not cashIn − expenses)
  */
 
 const { fetchPeriodLedgerData, fetchPaymentTotalsBySaleIds } = require("./finance/ledger.service");
-const { sumExpensesForRange, sumExpenseSplitForRange } = require("./expenseQuery.service");
+const {
+  sumExpensesForRange,
+  sumAllExpenses,
+  sumExpenseSplitForRange,
+  rangeBoundsUTC,
+} = require("./expenseQuery.service");
 const {
   getTotalOutstandingDebtFromLedger,
   getInventoryCapital,
 } = require("./finance/ledger.service");
 const { normalizeRole } = require("./rbac.service");
+const { resolveCashierFromTo } = require("./cashierWeekBound.service");
 const {
   resolveRole,
   canViewFinancialKpis,
@@ -43,7 +51,9 @@ function productCostPrice(sale) {
  * Raw period metrics — no role filtering.
  * @param {string} from
  * @param {string} to
- * @param {{ cashierId?: string }} [ledgerOptions] optional cashier scope (reports only)
+ * @param {{ cashierId?: string, applyCashSalePaidFallback?: boolean }} [ledgerOptions]
+ *   optional cashier scope; when applyCashSalePaidFallback is true (cashier-only API paths),
+ *   paidAmount not yet reflected in Payment rows counts only for sales with paymentMethod CASH.
  */
 async function computeCore(from, to, ledgerOptions = {}) {
   const { sales, payments, range, paymentsCount } = await fetchPeriodLedgerData(
@@ -64,7 +74,11 @@ async function computeCore(from, to, ledgerOptions = {}) {
 
   let expenses = 0;
   try {
-    expenses = toNumber(await sumExpensesForRange(from, to));
+    if (rangeBoundsUTC(from, to)) {
+      expenses = toNumber(await sumExpensesForRange(from, to));
+    } else {
+      expenses = toNumber(await sumAllExpenses());
+    }
   } catch {
     expenses = 0;
   }
@@ -73,13 +87,24 @@ async function computeCore(from, to, ledgerOptions = {}) {
 
   const saleIds = sales.map((s) => s && s._id).filter(Boolean);
   const paymentTotalsBySale = await fetchPaymentTotalsBySaleIds(saleIds);
+  const applyCashSalePaidFallback = Boolean(
+    ledgerOptions && ledgerOptions.applyCashSalePaidFallback
+  );
   let orphanSaleCash = 0;
   for (const s of sales) {
     if (!s || !s._id) continue;
     const sid = String(s._id);
     const paidOnSale = toNumber(s.paidAmount);
     const recordedForSale = paymentTotalsBySale.get(sid) ?? 0;
-    orphanSaleCash += Math.max(0, paidOnSale - recordedForSale);
+    const gap = Math.max(0, paidOnSale - recordedForSale);
+    if (applyCashSalePaidFallback) {
+      const pm = String(s.paymentMethod || "CASH").toUpperCase();
+      if (pm === "CASH") {
+        orphanSaleCash += gap;
+      }
+    } else {
+      orphanSaleCash += gap;
+    }
   }
 
   const cashInFromPayments = payments.reduce((acc, p) => acc + toNumber(p.amount), 0);
@@ -105,12 +130,14 @@ async function computeCore(from, to, ledgerOptions = {}) {
   return {
     range: range || { from, to },
     revenue,
+    totalSales: revenue,
     cost,
     expenses,
     grossProfit,
     netProfit,
     salesCount: sales.length,
     cashIn,
+    netCashFlow: cashIn,
     cashSales,
     debtPayments,
     paymentsCount,
@@ -125,6 +152,36 @@ async function computeCore(from, to, ledgerOptions = {}) {
  */
 function resolveUserRole(userRole) {
   return resolveRole(userRole) || normalizeRole(userRole);
+}
+
+/**
+ * Ledger scope for computeCore — cashier session vs admin cashier filter.
+ * @param {string} userRole
+ * @param {string} [userId]
+ * @param {string} [filterCashierId] admin/manager report filter only
+ */
+function ledgerOptionsForContext(userRole, userId, filterCashierId) {
+  const role = resolveUserRole(userRole);
+  const opts = {};
+  if (role === "cashier" && userId != null && String(userId).trim()) {
+    opts.cashierId = String(userId).trim();
+    opts.applyCashSalePaidFallback = true;
+    return opts;
+  }
+  const raw =
+    filterCashierId != null ? String(filterCashierId).trim() : "";
+  if (raw) {
+    opts.cashierId = raw;
+  }
+  return opts;
+}
+
+/** Cashier: canonical week range; others: request from/to unchanged. */
+function resolveQueryPeriod(userRole, from, to) {
+  if (resolveUserRole(userRole) === "cashier") {
+    return resolveCashierFromTo();
+  }
+  return { from, to };
 }
 
 async function compute(from, to, userRole, ledgerOptions = {}) {
@@ -187,6 +244,7 @@ async function buildDashboard(from, to, userRole, attach = {}) {
     },
     cash: {
       totalCashIn: core.cashIn,
+      cashIn: core.cashIn,
       cashSales: core.cashSales,
       debtPayments: core.debtPayments,
     },
@@ -198,24 +256,34 @@ async function buildDashboard(from, to, userRole, attach = {}) {
   return sanitizeDashboardResponse(payload, role);
 }
 
-async function buildDailyRegister(from, to, userRole) {
-  const { role, core, financialAllowed } = await compute(from, to, userRole);
+async function buildDailyRegister(from, to, userRole, ledgerOptions = {}) {
+  const { role, core, financialAllowed } = await compute(
+    from,
+    to,
+    userRole,
+    ledgerOptions
+  );
   const access = buildAccess(role);
+  const cashBlock = {
+    salesTotal: core.totalSales,
+    salesCount: core.salesCount,
+    cashIn: core.cashIn,
+    netCashFlow: core.netCashFlow,
+    cashSales: core.cashSales,
+    debtPayments: core.debtPayments,
+    paymentsTotal: core.cashIn,
+    netCash: core.cashIn,
+  };
   if (!financialAllowed) {
     return {
       date: from,
-      salesTotal: core.revenue,
-      salesCount: core.salesCount,
+      ...cashBlock,
       access,
     };
   }
   return {
     date: from,
-    salesTotal: core.revenue,
-    salesCount: core.salesCount,
-    paymentsTotal: core.cashIn,
-    cashIn: core.cashIn,
-    netCash: core.cashIn,
+    ...cashBlock,
     revenue: core.revenue,
     cost: core.cost,
     expenses: core.expenses,
@@ -226,8 +294,13 @@ async function buildDailyRegister(from, to, userRole) {
   };
 }
 
-async function buildCashClosing(from, to, userRole) {
-  const { role, core, financialAllowed } = await compute(from, to, userRole);
+async function buildCashClosing(from, to, userRole, ledgerOptions = {}) {
+  const { role, core, financialAllowed } = await compute(
+    from,
+    to,
+    userRole,
+    ledgerOptions
+  );
   const totalDebt = financialAllowed
     ? toNumber(await getTotalOutstandingDebtFromLedger())
     : 0;
@@ -247,7 +320,9 @@ async function buildCashClosing(from, to, userRole) {
       cashSales: core.cashSales,
       debtPayments: core.debtPayments,
       cashIn: core.cashIn,
+      totalCashIn: core.cashIn,
       netCash: core.cashIn,
+      netCashFlow: core.cashIn,
       countSales: core.salesCount,
     },
     role
@@ -259,7 +334,11 @@ async function buildReports(from, to, userRole, reportExtras = {}) {
     reportExtras && reportExtras.cashierId != null
       ? String(reportExtras.cashierId).trim()
       : "";
-  const ledgerOpts = cashierRaw ? { cashierId: cashierRaw } : {};
+  const ledgerOpts = ledgerOptionsForContext(
+    userRole,
+    reportExtras && reportExtras.sessionUserId,
+    cashierRaw || undefined
+  );
   const { role, core, financialAllowed } = await compute(
     from,
     to,
@@ -283,7 +362,9 @@ async function buildReports(from, to, userRole, reportExtras = {}) {
         cashSales: core.cashSales,
         debtPayments: core.debtPayments,
         totalCashIn: core.cashIn,
+        cashIn: core.cashIn,
       },
+      cashIn: core.cashIn,
       debt: totalDebtGlobal,
       topProducts: reportExtras.topProducts || [],
       topClients: reportExtras.topClients || [],
@@ -328,6 +409,8 @@ module.exports = {
   toNumber,
   computeCore,
   compute,
+  ledgerOptionsForContext,
+  resolveQueryPeriod,
   buildDashboard,
   buildDailyRegister,
   buildCashClosing,

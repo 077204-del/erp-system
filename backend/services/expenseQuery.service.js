@@ -114,6 +114,16 @@ async function sumExpensesForRange(fromStr, toStr) {
   return split.total;
 }
 
+/** All-time expense total when period bounds are missing (e.g. closing ALL). */
+async function sumAllExpenses() {
+  try {
+    const rows = await Expense.find({}).select("amount").lean();
+    return rows.reduce((acc, e) => acc + toNum(e.amount), 0);
+  } catch {
+    return 0;
+  }
+}
+
 async function summaryForMonth(month) {
   const b = getMonthDateBounds(month);
   if (!b) {
@@ -190,6 +200,7 @@ async function findExpensesFiltered(typeFilter, fromStr, toStr) {
 
 module.exports = {
   sumExpensesForRange,
+  sumAllExpenses,
   sumExpenseSplitForRange,
   summaryForMonth,
   getMonthDateBounds,

@@ -1,9 +1,6 @@
 const financialEngine = require("../services/financialEngine.service");
 const ledger = require("../services/finance/ledger.service");
-const {
-  roleFromReq,
-  sanitizeDashboardResponse,
-} = require("../services/responseSanitize.service");
+const { roleFromReq } = require("../services/responseSanitize.service");
 
 function safeString(v, fallback = "") {
   if (v == null) return fallback;
@@ -12,33 +9,17 @@ function safeString(v, fallback = "") {
 
 exports.getDashboard = async (req, res) => {
   try {
-    const { from, to } = req.query;
     const role = roleFromReq(req);
+    let from = safeString(req.query && req.query.from, "");
+    let to = safeString(req.query && req.query.to, "");
+    const period = financialEngine.resolveQueryPeriod(role, from, to);
+    from = period.from;
+    to = period.to;
 
-    if (role === "cashier" && req.user && req.user.id) {
-      const scopedCore = await financialEngine.computeCore(from, to, {
-        cashierId: String(req.user.id),
-      });
-      const totalDebt = await ledger.getTotalOutstandingDebtFromLedger();
-      const td = Number(totalDebt);
-      const safeDebt = Number.isFinite(td) ? td : 0;
-      const body = sanitizeDashboardResponse(
-        {
-          range: scopedCore.range,
-          stats: {
-            salesCount: scopedCore.salesCount,
-            sales: scopedCore.salesCount,
-            totalSales: scopedCore.revenue,
-            totalDebt: safeDebt,
-          },
-          debt: safeDebt,
-        },
-        role
-      );
-      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
-      res.setHeader("Pragma", "no-cache");
-      return res.status(200).json(body);
-    }
+    const ledgerOpts = financialEngine.ledgerOptionsForContext(
+      role,
+      req.user && req.user.id
+    );
 
     let attach = {};
     if (role === "admin") {
@@ -52,17 +33,34 @@ exports.getDashboard = async (req, res) => {
       }
     }
 
-    const body = await financialEngine.buildDashboard(from, to, role, attach);
+    const body = await financialEngine.buildDashboard(
+      from,
+      to,
+      role,
+      attach,
+      ledgerOpts
+    );
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
     res.setHeader("Pragma", "no-cache");
     return res.status(200).json(body);
   } catch (err) {
     console.error("DASHBOARD ERROR:", err && err.message ? err.message : err);
     const role = roleFromReq(req);
-    const empty = await financialEngine.buildDashboard(
+    const period = financialEngine.resolveQueryPeriod(
+      role,
       safeString(req.query && req.query.from, ""),
-      safeString(req.query && req.query.to, ""),
-      role
+      safeString(req.query && req.query.to, "")
+    );
+    const ledgerOpts = financialEngine.ledgerOptionsForContext(
+      role,
+      req.user && req.user.id
+    );
+    const empty = await financialEngine.buildDashboard(
+      period.from,
+      period.to,
+      role,
+      {},
+      ledgerOpts
     );
     return res.status(200).json({
       ...empty,

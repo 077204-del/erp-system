@@ -18,6 +18,7 @@ const {
 } = require("../services/invoiceRender.service");
 const mongoose = require("mongoose");
 const User = require("../models/user.model");
+const financialEngine = require("../services/financialEngine.service");
 
 function normalizeRoleForSalesFilter(role) {
   const r = String(role || "").trim().toLowerCase();
@@ -114,7 +115,7 @@ exports.createSale = async (req, res, next) => {
 // ======================
 exports.getSales = async (req, res, next) => {
   try {
-    const { from, to, cashierId } = req.query;
+    let { from, to, cashierId } = req.query;
     const role = normalizeRoleForSalesFilter(req.user && req.user.role);
     const rawCid = cashierId != null ? String(cashierId).trim() : "";
     let listOpts = {};
@@ -122,6 +123,11 @@ exports.getSales = async (req, res, next) => {
       if (req.user && req.user.id) {
         listOpts = { cashierId: String(req.user.id) };
       }
+      const period = financialEngine.resolveQueryPeriod(role, from, to);
+      from = period.from;
+      to = period.to;
+      const sales = await getSalesList(from, to, listOpts);
+      return res.json(sanitizeSaleList(sales, roleFromReq(req)));
     } else if (
       role === "admin" &&
       rawCid &&

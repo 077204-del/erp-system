@@ -7,11 +7,23 @@ const {
 exports.getCashSession = async (req, res) => {
   try {
     const { date } = req.query;
-    const from = date || null;
-    const to = date || null;
     const role = roleFromReq(req);
+    let from = date || "";
+    let to = date || "";
+    const period = financialEngine.resolveQueryPeriod(role, from, to);
+    from = period.from;
+    to = period.to;
 
-    const { core } = await financialEngine.compute(from || "", to || "", role);
+    const ledgerOpts = financialEngine.ledgerOptionsForContext(
+      role,
+      req.user && req.user.id
+    );
+    const { core } = await financialEngine.compute(
+      from,
+      to,
+      role,
+      ledgerOpts
+    );
 
     return res.json(
       sanitizeCashSessionResponse(

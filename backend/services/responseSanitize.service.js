@@ -1,4 +1,12 @@
 const { normalizeRole } = require("./rbac.service");
+const { parseMoney, lockMoneyFields } = require("./financialIntegrity.service");
+
+/** Coerce to number when present — never invent 0 for missing computeCore fields. */
+function formatMoneyField(value) {
+  if (value == null || value === "") return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
 
 /**
  * Resolve role for sanitization. Unlike rbac.normalizeRole, unknown roles are NOT
@@ -210,6 +218,12 @@ function privilegedDashboardResponse(payload, role) {
         p.cash && p.cash.totalCashIn != null
           ? p.cash.totalCashIn
           : raw.cashIn,
+      cashIn:
+        p.cash && p.cash.cashIn != null
+          ? p.cash.cashIn
+          : p.cash && p.cash.totalCashIn != null
+            ? p.cash.totalCashIn
+            : raw.cashIn,
       cashSales:
         p.cash && p.cash.cashSales != null ? p.cash.cashSales : raw.cashSales,
       debtPayments:
@@ -235,8 +249,23 @@ function privilegedDashboardResponse(payload, role) {
   return out;
 }
 
+function cashierOperationalCash(cash) {
+  if (!cash || typeof cash !== "object") return undefined;
+  const totalCashIn = formatMoneyField(cash.totalCashIn ?? cash.cashIn);
+  if (totalCashIn === undefined) return undefined;
+  const out = {
+    totalCashIn,
+    cashIn: totalCashIn,
+  };
+  const cs = formatMoneyField(cash.cashSales);
+  const dp = formatMoneyField(cash.debtPayments);
+  if (cs !== undefined) out.cashSales = cs;
+  if (dp !== undefined) out.debtPayments = dp;
+  return out;
+}
+
 /**
- * Dashboard contract — cashier: stats + debt only; admin/manager: full financial block.
+ * Dashboard contract — cashier: stats + debt + operational cash; admin/manager: full financial block.
  */
 function sanitizeDashboardResponse(payload, role) {
   const r = resolveRole(role) || normalizeRole(role);
@@ -249,6 +278,8 @@ function sanitizeDashboardResponse(payload, role) {
     };
     const debt = pickDebt(p);
     if (debt !== undefined) out.debt = debt;
+    const opCash = cashierOperationalCash(p.cash);
+    if (opCash) out.cash = opCash;
     return out;
   }
 
@@ -270,25 +301,150 @@ function safeNum(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+const CLOSING_MONEY_KEYS = [
+  "totalSales",
+  "revenue",
+  "cost",
+  "expenses",
+  "totalExpenses",
+  "grossProfit",
+  "netProfit",
+  "cashIn",
+  "totalCashIn",
+  "totalPaid",
+  "netCash",
+  "netCashFlow",
+  "cashSales",
+  "debtPayments",
+  "totalDebt",
+];
+
 function sanitizeCashClosingResponse(payload, role) {
   const r = resolveRole(role);
-  const p = payload && typeof payload === "object" ? { ...payload } : {};
+  const p =
+    payload && typeof payload === "object"
+      ? lockMoneyFields({ ...payload }, CLOSING_MONEY_KEYS)
+      : {};
   const access = buildAccess(r);
 
-  if (isAdmin(r)) {
+  if (isAdmin(r) || canViewFinancialKpis(r)) {
     return { ...p, access };
   }
 
-  if (isCashier(r) || !canViewFinancialKpis(r)) {
+  if (isCashier(r)) {
     return {
       date: p.date,
-      totalSales: safeNum(p.totalSales),
+      totalSales: p.totalSales,
       countSales: p.countSales,
+      cashIn: p.cashIn,
+      totalCashIn: p.totalCashIn,
+      totalPaid: p.totalPaid,
+      netCash: p.netCash,
+      netCashFlow: p.netCashFlow,
+      cashSales: p.cashSales,
+      debtPayments: p.debtPayments,
       access,
     };
   }
 
   return { ...p, access };
+}
+
+function registerOperationalCashSource(p) {
+  const nest = p.cash && typeof p.cash === "object" ? p.cash : {};
+  return {
+    totalCashIn:
+      p.totalCashIn ??
+      p.cashIn ??
+      p.paymentsTotal ??
+      nest.totalCashIn ??
+      nest.cashIn,
+    cashIn:
+      p.cashIn ??
+      p.totalCashIn ??
+      p.paymentsTotal ??
+      nest.cashIn ??
+      nest.totalCashIn,
+    cashSales: p.cashSales ?? nest.cashSales,
+    debtPayments: p.debtPayments ?? nest.debtPayments,
+    netCash:
+      p.netCash ??
+      p.netCashFlow ??
+      p.cashIn ??
+      p.paymentsTotal ??
+      nest.totalCashIn ??
+      nest.cashIn,
+    netCashFlow:
+      p.netCashFlow ??
+      p.netCash ??
+      p.cashIn ??
+      nest.totalCashIn ??
+      nest.cashIn,
+    paymentsTotal:
+      p.paymentsTotal ??
+      p.cashIn ??
+      p.totalCashIn ??
+      nest.totalCashIn ??
+      nest.cashIn,
+  };
+}
+
+function sanitizeDailyRegisterResponse(payload, role) {
+  const r = resolveRole(role) || normalizeRole(role);
+  const p = payload && typeof payload === "object" ? { ...payload } : {};
+  const access = buildAccess(r);
+  const src = registerOperationalCashSource(p);
+
+  const base = {
+    date: p.date,
+    salesCount: p.salesCount,
+    salesTotal: formatMoneyField(p.salesTotal),
+    range: p.range || null,
+  };
+
+  // Daily Register: always emit operational cash fields for every role (cashiers
+  // must match admin contract). Use safeNum so null/invalid from upstream never
+  // drops keys — Express JSON omits undefined properties.
+  const cashIn = safeNum(
+    src.cashIn ?? src.totalCashIn ?? src.paymentsTotal ?? src.netCash
+  );
+  const totalCashIn = safeNum(src.totalCashIn ?? src.cashIn ?? cashIn);
+  const paymentsTotal = safeNum(src.paymentsTotal ?? src.cashIn ?? cashIn);
+  const netCash = safeNum(src.netCash ?? src.cashIn ?? cashIn);
+  const netCashFlow = safeNum(
+    src.netCashFlow ?? src.netCash ?? src.cashIn ?? cashIn
+  );
+  const cashSales = safeNum(src.cashSales);
+  const debtPayments = safeNum(src.debtPayments);
+
+  base.cashIn = cashIn;
+  base.totalCashIn = totalCashIn;
+  base.paymentsTotal = paymentsTotal;
+  base.netCash = netCash;
+  base.netCashFlow = netCashFlow;
+  base.cashSales = cashSales;
+  base.debtPayments = debtPayments;
+  base.cash = {
+    totalCashIn,
+    cashIn,
+    cashSales,
+    debtPayments,
+  };
+
+  if (!canViewFinancialKpis(r)) {
+    return { ...base, access };
+  }
+
+  return {
+    ...base,
+    expensesTotal: formatMoneyField(p.expensesTotal ?? p.expenses),
+    expenses: formatMoneyField(p.expenses),
+    revenue: formatMoneyField(p.revenue),
+    cost: formatMoneyField(p.cost),
+    grossProfit: formatMoneyField(p.grossProfit),
+    netProfit: formatMoneyField(p.netProfit),
+    access,
+  };
 }
 
 function sanitizeCashSessionResponse(session, role) {
@@ -321,32 +477,73 @@ function sanitizeCashSessionResponse(session, role) {
 
 function sanitizeReportsResponse(payload, role) {
   const r = resolveRole(role);
-  const p = payload && typeof payload === "object" ? { ...payload } : {};
+  const raw = payload && typeof payload === "object" ? payload : {};
+  const p = lockMoneyFields({ ...raw }, [
+    "revenue",
+    "cost",
+    "expenses",
+    "grossProfit",
+    "netProfit",
+    "cashIn",
+    "netCashFlow",
+  ]);
   const access = buildAccess(r);
 
-  if (isAdmin(r)) {
-    return { ...p, access };
-  }
-
   if (isCashier(r) || !canViewFinancialKpis(r)) {
-    const rev = safeNum(p.revenue);
-    return {
+    const rev = parseMoney(p.revenue);
+    const cvc = p.cashVsCredit && typeof p.cashVsCredit === "object"
+      ? lockMoneyFields({ ...p.cashVsCredit }, [
+          "cashSales",
+          "creditSales",
+          "mixed",
+          "ratioCash",
+          "ratioCredit",
+        ])
+      : {
+          cashSales: 0,
+          creditSales: 0,
+          mixed: 0,
+          ratioCash: 0,
+          ratioCredit: 0,
+        };
+    const opCash =
+      p.cash && typeof p.cash === "object"
+        ? lockMoneyFields({ ...p.cash }, [
+            "totalCashIn",
+            "cashIn",
+            "cashSales",
+            "debtPayments",
+          ])
+        : null;
+    const out = {
       range: p.range || null,
       salesCount: p.salesCount,
       totalSales: rev,
+      cashIn: p.cashIn,
+      netCashFlow: p.netCashFlow,
       topProducts: p.topProducts || [],
       topClients: p.topClients || [],
-      cashVsCredit: p.cashVsCredit || {
-        cashSales: 0,
-        creditSales: 0,
-        mixed: 0,
-        ratioCash: 0,
-        ratioCredit: 0,
-      },
+      cashVsCredit: cvc,
       access,
     };
+    if (opCash) out.cash = opCash;
+    return out;
   }
 
+  if (p.cash && typeof p.cash === "object") {
+    p.cash = lockMoneyFields({ ...p.cash }, [
+      "totalCashIn",
+      "cashIn",
+      "cashSales",
+      "debtPayments",
+    ]);
+  }
+  if (p.expensesBreakdown && typeof p.expensesBreakdown === "object") {
+    p.expensesBreakdown = lockMoneyFields({ ...p.expensesBreakdown }, [
+      "daily",
+      "monthly",
+    ]);
+  }
   return { ...p, access };
 }
 
@@ -385,6 +582,7 @@ module.exports = {
   sanitizeDashboardResponse,
   sanitizeReportsResponse,
   sanitizeCashClosingResponse,
+  sanitizeDailyRegisterResponse,
   sanitizeCashSessionResponse,
   sanitizeClientLedger,
   buildAccess,
