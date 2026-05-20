@@ -5,6 +5,7 @@ const {
 } = require("../services/finance.write.service");
 const { getPaymentsList } = require("../services/finance/ledger.service");
 const { appendAudit } = require("../services/auditLog.service");
+const { notifyCashierAction } = require("../services/notification.service");
 
 function num(x) {
   const n = Number(x);
@@ -92,6 +93,12 @@ exports.createPayment = async (req, res, next) => {
       },
       req
     );
+
+    void notifyCashierAction(req, {
+      type: "DEBT",
+      message: "",
+      amount: paymentAmount,
+    });
 
     return res.status(201).json({
       message: "Payment recorded",

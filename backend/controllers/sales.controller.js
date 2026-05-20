@@ -19,6 +19,7 @@ const {
 const mongoose = require("mongoose");
 const User = require("../models/user.model");
 const financialEngine = require("../services/financialEngine.service");
+const { notifyCashierAction } = require("../services/notification.service");
 
 function normalizeRoleForSalesFilter(role) {
   const r = String(role || "").trim().toLowerCase();
@@ -101,6 +102,12 @@ exports.createSale = async (req, res, next) => {
     if (io) {
       io.emit("new-sale", safeSale);
     }
+
+    void notifyCashierAction(req, {
+      type: "SALE",
+      message: "",
+      amount: Number(sale.total) || 0,
+    });
 
     return res.status(201).json(safeSale);
   } catch (err) {

@@ -1,6 +1,7 @@
 /**
- * Cashier date window (server-side): business week Saturday → Friday (local calendar).
- * Active range: [weekStart, min(today, weekEndFriday)] — no client widening.
+ * Cashier date window (server-side): last completed business week
+ * Saturday 00:00:00 → Friday 23:59:59.999 (local calendar), same bounds style as rangeBoundsUTC.
+ * The "current" week (Sat containing today) is excluded; data is always the prior full Sat–Fri block.
  */
 
 function toYMD(d) {
@@ -15,7 +16,8 @@ function isValidYmd(s) {
 }
 
 /**
- * Current cashier business week (Sat–Fri). `to` is capped at today while the week is ongoing.
+ * Last full business week: previous Saturday through the following Friday (local YMD).
+ * Inclusive date strings pair with expenseQuery.rangeBoundsUTC (local day edges).
  * @param {Date} [now]
  * @returns {{ from: string, to: string, weekStart: string, weekEnd: string }}
  */
@@ -23,29 +25,29 @@ function getCashierWeekRange(now = new Date()) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const dow = today.getDay();
 
-  let daysBack;
+  let daysBackToCurrentSaturday;
   if (dow === 6) {
-    daysBack = 0;
+    daysBackToCurrentSaturday = 0;
   } else if (dow === 0) {
-    daysBack = 1;
+    daysBackToCurrentSaturday = 1;
   } else {
-    daysBack = dow + 1;
+    daysBackToCurrentSaturday = dow + 1;
   }
 
-  const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - daysBack);
+  const currentWeekSaturday = new Date(today);
+  currentWeekSaturday.setDate(today.getDate() - daysBackToCurrentSaturday);
 
-  const weekEndFriday = new Date(weekStart);
-  weekEndFriday.setDate(weekStart.getDate() + 6);
+  const lastFullWeekSaturday = new Date(currentWeekSaturday);
+  lastFullWeekSaturday.setDate(currentWeekSaturday.getDate() - 7);
 
-  const toCap =
-    today.getTime() <= weekEndFriday.getTime() ? today : weekEndFriday;
+  const lastFullWeekFriday = new Date(lastFullWeekSaturday);
+  lastFullWeekFriday.setDate(lastFullWeekSaturday.getDate() + 6);
 
   return {
-    from: toYMD(weekStart),
-    to: toYMD(toCap),
-    weekStart: toYMD(weekStart),
-    weekEnd: toYMD(weekEndFriday),
+    from: toYMD(lastFullWeekSaturday),
+    to: toYMD(lastFullWeekFriday),
+    weekStart: toYMD(lastFullWeekSaturday),
+    weekEnd: toYMD(lastFullWeekFriday),
   };
 }
 
@@ -56,7 +58,7 @@ function getCashierWeekQueryRange(now) {
 }
 
 /**
- * Single source of truth for cashier list/financial range (ignores query from/to).
+ * Single source of truth for cashier sales/financial range (ignores query from/to).
  * @returns {{ from: string, to: string }}
  */
 function resolveCashierFromTo() {
@@ -65,7 +67,7 @@ function resolveCashierFromTo() {
 }
 
 /**
- * Register `date` must lie in the canonical cashier window (strict, no slack).
+ * Register `date` must lie in the canonical cashier window (last full Sat–Fri, strict).
  */
 function isCashierAllowedRegisterDate(dateStr, now = new Date()) {
   if (!isValidYmd(dateStr)) {

@@ -232,21 +232,12 @@ function ledgerOptionsForContext(userRole, userId, filterCashierId) {
   return opts;
 }
 
-/** Cashier: canonical week unless query is one explicit calendar day (from === to as YYYY-MM-DD). */
+/** Cashier: always last full Sat–Fri week; client from/to and single-day queries are ignored. */
 function resolveQueryPeriod(userRole, from, to) {
   if (resolveUserRole(userRole) === "cashier") {
-    const f = from != null ? String(from).trim() : "";
-    const t = to != null ? String(to).trim() : "";
-    const ymd = /^\d{4}-\d{2}-\d{2}$/;
-    if (ymd.test(f) && f === t) {
-      if (traceComputeCoreEnabled()) {
-        console.log("[resolveQueryPeriod] cashier single-day", { from: f, to: t });
-      }
-      return { from: f, to: t };
-    }
     const w = resolveCashierFromTo();
     if (traceComputeCoreEnabled()) {
-      console.log("[resolveQueryPeriod] cashier week (resolveCashierFromTo)", w);
+      console.log("[resolveQueryPeriod] cashier lastFullWeek (resolveCashierFromTo)", w);
     }
     return w;
   }

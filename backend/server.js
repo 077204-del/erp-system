@@ -38,6 +38,7 @@ try {
   const reportsRoutes = require("./routes/reports.routes");
   const settingsRoutes = require("./routes/settings.routes");
   const expenseRoutes = require("./routes/expense.routes");
+  const notificationsRoutes = require("./routes/notifications.routes");
   const dailyRegisterController = require("./controllers/dailyRegister.controller");
 
   // ======================
@@ -176,6 +177,8 @@ try {
 
   app.use("/api/expenses", protectedAuthMiddleware, expenseRoutes);
 
+  app.use("/api/notifications", adminOnly, notificationsRoutes);
+
   // ======================
   // 404 HANDLER
   // ======================
@@ -261,6 +264,21 @@ try {
           console.log(`Public URL: ${publicHint}`);
         }
       });
+      try {
+        const { Server } = require("socket.io");
+        const { attachAdminSocket } = require("./config/socketAdmin");
+        const io = new Server(httpServer, {
+          cors: { origin: "*", methods: ["GET", "POST"] },
+        });
+        attachAdminSocket(io);
+        app.set("io", io);
+        console.log("[ERP BOOT] Socket.IO ready (admins: room admins, event admin_notification)");
+      } catch (sockErr) {
+        console.warn(
+          "[ERP BOOT] Socket.IO attach failed:",
+          sockErr && sockErr.message ? sockErr.message : sockErr
+        );
+      }
       httpServer.on("error", (err) => {
         console.log("[ERP] HTTP server error:", err && err.message ? err.message : err);
         console.error("[ERP] HTTP server error:", err);
