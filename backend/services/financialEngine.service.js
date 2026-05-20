@@ -292,11 +292,7 @@ function resolveQueryPeriod(userRole, from, to) {
 
   let period;
   if (role === "cashier") {
-    if (f && t && f === t) {
-      period = { from: f, to: t };
-    } else {
-      period = resolveCashierFromTo();
-    }
+    period = resolveCashierFromTo();
   } else if (f && t) {
     period = orderYmdPair(f, t);
   } else {
@@ -312,7 +308,15 @@ function resolveQueryPeriod(userRole, from, to) {
   }
 
   const resolved = ensureValidPeriodOutput(period);
-  console.log("[resolveQueryPeriod] resolved", resolved);
+  if (role === "cashier") {
+    console.log("[CashierWeekRange]", {
+      resolvedFrom: resolved.from,
+      resolvedTo: resolved.to,
+      role: "cashier",
+    });
+  } else {
+    console.log("[resolveQueryPeriod] resolved", resolved);
+  }
   return resolved;
 }
 

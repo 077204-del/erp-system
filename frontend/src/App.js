@@ -485,7 +485,7 @@ function MainWorkspace({ setToken, reportLoading }) {
           canViewFinancial={canViewFinancialKpis}
           isAdmin={apiRole === "admin"}
           isCashier={apiRole === "cashier"}
-          hideDateFilters={isCashier}
+          hideDateFilters={isCashier || apiRole === "cashier"}
           cashierWeeklyBreakdown={cashierWeeklyBreakdown}
         />
       ) : null}
@@ -508,7 +508,7 @@ function MainWorkspace({ setToken, reportLoading }) {
           canEditSales={canEditSales}
           canVoidSales={canVoidSales}
           showCashierFilter={isAdmin}
-          hideDateFilters={isCashier}
+          hideDateFilters={isCashier || apiRole === "cashier"}
           cashiers={saleCashiers}
           cashierId={workspaceCashierId}
           onCashierChange={(id) => {
