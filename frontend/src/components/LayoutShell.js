@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useErpUi } from "../context/ErpUiContext";
 import { useLocale } from "../context/LocaleContext";
-import { useAdminNotificationSocket } from "../hooks/useAdminNotificationSocket";
 import { safeText } from "../utils/erpFormat";
 import { resolveWorkspaceRole } from "../utils/workspaceRole";
 
@@ -146,15 +144,9 @@ export default function LayoutShell({
   onLogout,
 }) {
   const { t } = useLocale();
-  const { toast } = useErpUi();
   const workspaceRole = resolveWorkspaceRole();
   const role = workspaceRole || String(userRole || "").toLowerCase();
   const isAdmin = workspaceRole === "admin";
-
-  useAdminNotificationSocket({
-    enabled: isAdmin,
-    toast,
-  });
   const isManager = role === "manager";
   const canViewReports = navFlags.canViewReports === true;
   const canManageExpenses = navFlags.canManageExpenses === true;

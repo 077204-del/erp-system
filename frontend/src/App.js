@@ -3,6 +3,7 @@ import api from "./api";
 import MobileLayoutPreview, {
   isMobileLayoutPreviewHash,
 } from "./components/MobileLayoutPreview";
+import AdminNotificationBridge from "./components/AdminNotificationBridge";
 import LayoutShell from "./components/LayoutShell";
 import { ErpUiProvider, useErpUi } from "./context/ErpUiContext";
 import { LocaleProvider, useLocale } from "./context/LocaleContext";
@@ -11,6 +12,10 @@ import { apiErrorMessage } from "./utils/erpFormat";
 import { freshGetConfig, workspaceGetParams } from "./config/apiRequest";
 import { mapDashboardApiToState } from "./utils/dashboardFinance";
 import { readStoredUserWithJwtSync, resolveWorkspaceRole } from "./utils/workspaceRole";
+import {
+  connectAdminNotificationSocket,
+  disconnectAdminNotificationSocket,
+} from "./services/adminNotificationSocket";
 import {
   cashierTodayRange,
   getCashierWeekRange,
@@ -411,6 +416,7 @@ function MainWorkspace({ setToken, reportLoading }) {
       confirmLabel: t("app.signOutConfirm"),
       danger: true,
       onConfirm: () => {
+        disconnectAdminNotificationSocket();
         localStorage.removeItem("token");
         localStorage.removeItem("user");
         setToken(null);
@@ -720,12 +726,22 @@ export default function App() {
   return (
     <LocaleProvider>
       <ErpUiProvider globalLoading={globalLoading}>
+        <AdminNotificationBridge token={token} />
         {!token ? (
           <Login
             onLogin={(payload) => {
-              const tk = payload.token || payload;
-              localStorage.setItem("token", tk);
-              setToken(tk);
+              const tk =
+                payload && typeof payload === "object"
+                  ? payload.token
+                  : payload;
+              const tkStr = String(tk || "").trim();
+              if (tkStr) {
+                localStorage.setItem("token", tkStr);
+                setToken(tkStr);
+                if (resolveWorkspaceRole() === "admin") {
+                  connectAdminNotificationSocket(tkStr);
+                }
+              }
             }}
             onLoadingChange={setGlobalLoading}
           />
