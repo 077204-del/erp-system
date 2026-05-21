@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import api from "../api";
+import { freshGetConfig } from "../config/apiRequest";
 import ErpDataTable from "../components/ErpDataTable";
 import ErpModuleFooter from "../components/ErpModuleFooter";
 import NewSaleModal from "../components/NewSaleModal";
@@ -17,6 +18,7 @@ import {
   safeNum,
   safeText,
 } from "../utils/erpFormat";
+import { resolveClientDebtFromWorkspace } from "../utils/clientDebtDisplay";
 
 function StatCardSkeleton() {
   return (
@@ -1371,6 +1373,7 @@ export function PaymentsView({
   canCreatePayments = true,
   onRefreshWorkspace,
   toast,
+  showClientDebtBalance = false,
 }) {
   void _isAdmin;
   const { t } = useLocale();
@@ -1381,6 +1384,43 @@ export function PaymentsView({
     new Date().toISOString().slice(0, 10)
   );
   const [collectSaving, setCollectSaving] = useState(false);
+  const [ledgerDebt, setLedgerDebt] = useState(null);
+
+  const cachedClientDebt = useMemo(
+    () =>
+      resolveClientDebtFromWorkspace(
+        collectClientId,
+        clients,
+        sales,
+        payments
+      ),
+    [collectClientId, clients, sales, payments]
+  );
+
+  useEffect(() => {
+    if (!showClientDebtBalance || !collectClientId) {
+      setLedgerDebt(null);
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get(
+          `/api/clients/${encodeURIComponent(String(collectClientId))}/debt`,
+          freshGetConfig()
+        );
+        if (!cancelled && res.data) {
+          const n = Number(res.data.totalDebt);
+          setLedgerDebt(Number.isFinite(n) ? Math.max(0, n) : 0);
+        }
+      } catch {
+        if (!cancelled) setLedgerDebt(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showClientDebtBalance, collectClientId]);
 
   const openSalesForClient = useMemo(() => {
     if (!collectClientId || !Array.isArray(sales)) return [];
@@ -1389,6 +1429,26 @@ export function PaymentsView({
       return String(cid) === String(collectClientId) && safeNum(s.debt, 0) > 0;
     });
   }, [sales, collectClientId]);
+
+  const selectedSaleDebt = useMemo(() => {
+    if (!collectSaleId) return null;
+    const sale = openSalesForClient.find(
+      (s) => String(s._id) === String(collectSaleId)
+    );
+    return sale != null ? Math.max(0, safeNum(sale.debt, 0)) : null;
+  }, [collectSaleId, openSalesForClient]);
+
+  const displayClientDebt = useMemo(() => {
+    if (!collectClientId) return 0;
+    if (selectedSaleDebt != null) return selectedSaleDebt;
+    if (ledgerDebt != null && Number.isFinite(ledgerDebt)) return ledgerDebt;
+    return cachedClientDebt;
+  }, [
+    collectClientId,
+    selectedSaleDebt,
+    ledgerDebt,
+    cachedClientDebt,
+  ]);
 
   const submitDebtPayment = async () => {
     if (!toast) return;
@@ -1530,6 +1590,23 @@ export function PaymentsView({
               ))}
             </select>
           </div>
+          {showClientDebtBalance ? (
+            <div
+              className="erp-field erp-payment-debt-field"
+              role="status"
+              aria-live="polite"
+              id="pay-collect-debt-display"
+            >
+              <p className="erp-card-label" style={{ marginBottom: "0.25rem" }}>
+                {collectSaleId
+                  ? t("paymentCollect.saleDebt")
+                  : t("paymentCollect.currentDebt")}
+              </p>
+              <p className="erp-card-value erp-num" style={{ margin: 0 }}>
+                {formatMoneyDZD(displayClientDebt)}
+              </p>
+            </div>
+          ) : null}
           <div className="erp-field">
             <label htmlFor="pay-collect-amt">{t("paymentCollect.amount")}</label>
             <input

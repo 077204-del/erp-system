@@ -140,6 +140,8 @@ export const messages = {
       needClient: "اختر عميلاً.",
       needAmount: "أدخل مبلغاً صالحاً.",
       forbidden: "غير مسموح.",
+      currentDebt: "الدين الحالي",
+      saleDebt: "دين هذه العملية",
     },
     settings: {
       title: "الإعدادات · Paramètres",
@@ -682,6 +684,8 @@ export const messages = {
       needClient: "Choisissez un client.",
       needAmount: "Montant invalide.",
       forbidden: "Interdit.",
+      currentDebt: "Dette actuelle",
+      saleDebt: "Dette de cette vente",
     },
     settings: {
       title: "Paramètres",
@@ -1227,6 +1231,8 @@ export const messages = {
       needClient: "Select a client.",
       needAmount: "Enter a valid amount.",
       forbidden: "Forbidden.",
+      currentDebt: "Current debt",
+      saleDebt: "This sale's debt",
     },
     settings: {
       title: "Parameters · Settings",

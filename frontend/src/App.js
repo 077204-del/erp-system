@@ -20,6 +20,7 @@ import { purgeApiCachesOnBoot } from "./offline/responseCache";
 import CashClosingView from "./views/CashClosingView";
 import ClientDebtView from "./views/ClientDebtView";
 import CashierDailyRegisterView from "./views/CashierDailyRegisterView";
+import CashierPaymentsView from "./views/CashierPaymentsView";
 import DailyRegisterView from "./views/DailyRegisterView";
 import InvoiceCenterView from "./views/InvoiceCenterView";
 import ReportsView from "./views/ReportsView";
@@ -561,17 +562,30 @@ function MainWorkspace({ setToken, reportLoading }) {
       ) : null}
 
       {activeView === "payments" ? (
-        <PaymentsView
-          payments={payments}
-          clients={clients}
-          sales={sales}
-          loading={loading}
-          initialSyncDone={initialSyncDone}
-          isAdmin={isAdmin}
-          canCreatePayments={canCreatePayments}
-          onRefreshWorkspace={() => fetchAll(from, to)}
-          toast={toast}
-        />
+        isCashierRole ? (
+          <CashierPaymentsView
+            payments={payments}
+            clients={clients}
+            sales={sales}
+            loading={loading}
+            initialSyncDone={initialSyncDone}
+            canCreatePayments={canCreatePayments}
+            onRefreshWorkspace={refreshWorkspaceData}
+            toast={toast}
+          />
+        ) : (
+          <PaymentsView
+            payments={payments}
+            clients={clients}
+            sales={sales}
+            loading={loading}
+            initialSyncDone={initialSyncDone}
+            isAdmin={isAdmin}
+            canCreatePayments={canCreatePayments}
+            onRefreshWorkspace={() => fetchAll(from, to)}
+            toast={toast}
+          />
+        )
       ) : null}
 
       {activeView === "invoices" ? (

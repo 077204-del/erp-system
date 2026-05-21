@@ -1859,6 +1859,14 @@ select option {
   cursor: not-allowed;
 }
 
+.erp-payment-debt-field {
+  grid-column: 1 / -1;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--erp-radius-sm, 8px);
+  background: var(--erp-surface-muted, #f1f5f9);
+  border: 1px solid var(--erp-border, #e2e8f0);
+}
+
 .erp-perm-grid {
   display: grid;
   gap: 0.5rem 1rem;
