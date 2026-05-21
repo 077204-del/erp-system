@@ -52,10 +52,7 @@ export function getCashierWeekRange(date) {
   const diffToSaturday = (day + 1) % 7;
   const saturday = new Date(d);
   saturday.setDate(d.getDate() - diffToSaturday);
-  const toYmd =
-    typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(String(date).trim())
-      ? String(date).trim()
-      : localCalendarYmd(d);
+  const toYmd = localCalendarYmd(new Date());
   return {
     from: localCalendarYmd(saturday),
     to: toYmd,

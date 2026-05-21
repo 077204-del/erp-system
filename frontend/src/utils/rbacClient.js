@@ -3,8 +3,9 @@
 export function normalizeRoleClient(role) {
   let r = String(role || "").trim().toLowerCase();
   if (r === "administrator" || r === "superadmin" || r === "owner") r = "admin";
+  if (r === "caissier") r = "cashier";
   if (r === "admin" || r === "manager" || r === "cashier") return r;
-  return r || "cashier";
+  return "";
 }
 
 export function canViewFinancialRole(role) {

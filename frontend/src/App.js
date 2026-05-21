@@ -10,7 +10,7 @@ import Login from "./Login";
 import { apiErrorMessage } from "./utils/erpFormat";
 import { freshGetConfig, workspaceGetParams } from "./config/apiRequest";
 import { mapDashboardApiToState } from "./utils/dashboardFinance";
-import { normalizeRoleClient } from "./utils/rbacClient";
+import { readStoredUserWithJwtSync, resolveWorkspaceRole } from "./utils/workspaceRole";
 import {
   cashierTodayRange,
   getCashierWeekRange,
@@ -19,6 +19,7 @@ import { localCalendarYmd } from "./utils/localCalendarYmd";
 import { purgeApiCachesOnBoot } from "./offline/responseCache";
 import CashClosingView from "./views/CashClosingView";
 import ClientDebtView from "./views/ClientDebtView";
+import CashierDailyRegisterView from "./views/CashierDailyRegisterView";
 import DailyRegisterView from "./views/DailyRegisterView";
 import InvoiceCenterView from "./views/InvoiceCenterView";
 import ReportsView from "./views/ReportsView";
@@ -45,67 +46,9 @@ function safeText(v, fallback = "—") {
   return s.length ? s : fallback;
 }
 
-function readStoredUser() {
-  try {
-    return JSON.parse(localStorage.getItem("user") || "null");
-  } catch {
-    return null;
-  }
-}
-
-/** Decode JWT payload (no signature verify) — align UI with token when localStorage.user lags. */
-function decodeJwtPayloadUnsafe() {
-  try {
-    const t = localStorage.getItem("token");
-    if (!t) return null;
-    const parts = t.split(".");
-    if (parts.length < 2) return null;
-    let b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const pad = (4 - (b64.length % 4)) % 4;
-    if (pad) b64 += "=".repeat(pad);
-    const json = JSON.parse(atob(b64));
-    return json && typeof json === "object" ? json : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Merge `localStorage.user` with JWT role/permissions when they differ (post-deploy / admin edits).
- * Persists only when a patch is applied.
- */
-function readStoredUserWithJwtSync() {
-  const u = readStoredUser();
-  const jwt = decodeJwtPayloadUnsafe();
-  if (!jwt) return u;
-
-  const jwtRole = jwt.role != null ? normalizeRoleClient(jwt.role) : "";
-  const storedRole = u != null ? normalizeRoleClient(u.role) : "";
-  const jwtPerms =
-    jwt.permissions != null && typeof jwt.permissions === "object"
-      ? jwt.permissions
-      : null;
-
-  if (!jwtRole || jwtRole === storedRole) return u;
-
-  const merged = {
-    ...(u && typeof u === "object" ? u : {}),
-    role: jwtRole,
-    ...(jwtPerms ? { permissions: jwtPerms } : {}),
-  };
-  if (merged.id == null && jwt.id != null) merged.id = String(jwt.id);
-  try {
-    localStorage.setItem("user", JSON.stringify(merged));
-  } catch {
-    /* ignore */
-  }
-  return merged;
-}
-
 function initialRangeForRole() {
   try {
-    const u = readStoredUserWithJwtSync();
-    if (String(u?.role || "").toLowerCase() === "cashier") {
+    if (resolveWorkspaceRole() === "cashier") {
       const today = localCalendarYmd(new Date());
       return getCashierWeekRange(today);
     }
@@ -160,10 +103,11 @@ function MainWorkspace({ setToken, reportLoading }) {
 
   const initialFetchRef = useRef(false);
   const storedUser = readStoredUserWithJwtSync();
-  const roleLower = normalizeRoleClient(storedUser?.role);
+  const workspaceRole = resolveWorkspaceRole();
+  const roleLower = workspaceRole;
+  const isCashierRole = workspaceRole === "cashier";
   const isAdmin = roleLower === "admin";
   const isManager = roleLower === "manager";
-  const isCashier = roleLower === "cashier";
   const permObj = storedUser?.permissions;
   const perms = permObj && typeof permObj === "object" ? permObj : {};
   const canViewReports = isAdmin || isManager;
@@ -172,19 +116,19 @@ function MainWorkspace({ setToken, reportLoading }) {
   const canManageProducts =
     isAdmin || isManager || perms.canManageProducts === true;
   const canManageClients =
-    isAdmin || isManager || isCashier || perms.canManageClients === true;
+    isAdmin || isManager || isCashierRole || perms.canManageClients === true;
   const canCreateSales =
     isAdmin ||
     isManager ||
-    isCashier ||
+    isCashierRole ||
     perms.canCreateSales === true;
   const canCreatePayments =
     isAdmin ||
     isManager ||
-    isCashier ||
+    isCashierRole ||
     perms.canCreatePayments === true;
   const canEditSales =
-    isAdmin || isManager || isCashier || perms.canEditSales === true;
+    isAdmin || isManager || isCashierRole || perms.canEditSales === true;
   const canVoidSales = isAdmin || isManager;
   const apiRole = dashboardMeta.role || "";
   const canViewFinancialKpis =
@@ -325,7 +269,7 @@ function MainWorkspace({ setToken, reportLoading }) {
   }, [fetchAll]);
 
   const refreshWorkspaceData = useCallback(() => {
-    if (isCashier) {
+    if (isCashierRole) {
       if (cashierPreset === "today") {
         loadToday();
       } else {
@@ -334,17 +278,17 @@ function MainWorkspace({ setToken, reportLoading }) {
       return;
     }
     fetchAll(from, to);
-  }, [isCashier, cashierPreset, loadToday, loadWeek, fetchAll, from, to]);
+  }, [isCashierRole, cashierPreset, loadToday, loadWeek, fetchAll, from, to]);
 
   useEffect(() => {
     if (initialFetchRef.current) return;
     initialFetchRef.current = true;
-    if (isCashier) {
+    if (isCashierRole) {
       loadWeek();
       return;
     }
     fetchAll(from, to);
-  }, [fetchAll, from, to, isCashier, loadWeek]);
+  }, [fetchAll, from, to, isCashierRole, loadWeek]);
 
   useEffect(() => {
     const onQueued = () => {
@@ -413,7 +357,7 @@ function MainWorkspace({ setToken, reportLoading }) {
   ]);
 
   const handleApply = () => {
-    if (isCashier) {
+    if (isCashierRole) {
       if (cashierPreset === "today") loadToday();
       else loadWeek();
       return;
@@ -422,7 +366,7 @@ function MainWorkspace({ setToken, reportLoading }) {
   };
 
   const applyReportPreset = (key) => {
-    if (isCashier) {
+    if (isCashierRole) {
       if (key === "today") loadToday();
       else if (key === "week") loadWeek();
       return;
@@ -448,7 +392,7 @@ function MainWorkspace({ setToken, reportLoading }) {
   };
 
   const handleReset = () => {
-    if (isCashier) {
+    if (isCashierRole) {
       setWorkspaceCashierId("");
       loadWeek();
       return;
@@ -515,7 +459,7 @@ function MainWorkspace({ setToken, reportLoading }) {
       </div>
 
       {activeView === "dashboard" ? (
-        isCashier ? (
+        isCashierRole ? (
           <CashierDashboardView
             loading={loading}
             initialSyncDone={initialSyncDone}
@@ -549,7 +493,7 @@ function MainWorkspace({ setToken, reportLoading }) {
       ) : null}
 
       {activeView === "sales" ? (
-        isCashier ? (
+        isCashierRole ? (
           <CashierSalesView
             sales={sales}
             loading={loading}
@@ -677,16 +621,27 @@ function MainWorkspace({ setToken, reportLoading }) {
       ) : null}
 
       {activeView === "register" ? (
-        <DailyRegisterView
-          sales={sales}
-          payments={payments}
-          loading={loading}
-          onRefresh={refreshWorkspaceData}
-          canViewFinancial={canViewFinancialKpis}
-          workspaceFrom={from}
-          workspaceTo={to}
-          isCashier={isCashier}
-        />
+        isCashierRole ? (
+          <CashierDailyRegisterView
+            sales={sales}
+            payments={payments}
+            loading={loading}
+            onRefresh={refreshWorkspaceData}
+            canViewFinancial={canViewFinancialKpis}
+            workspaceFrom={from}
+            workspaceTo={to}
+          />
+        ) : (
+          <DailyRegisterView
+            sales={sales}
+            payments={payments}
+            loading={loading}
+            onRefresh={() => fetchAll(from, to)}
+            canViewFinancial={canViewFinancialKpis}
+            workspaceFrom={from}
+            workspaceTo={to}
+          />
+        )
       ) : null}
 
       {activeView === "expenses" ? (

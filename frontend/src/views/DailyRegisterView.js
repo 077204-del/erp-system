@@ -78,7 +78,7 @@ const EMPTY_SUMMARY = {
 
 
 
-export default function DailyRegisterView({
+export function DailyRegisterContent({
 
   sales,
 
@@ -94,7 +94,7 @@ export default function DailyRegisterView({
 
   workspaceTo = "",
 
-  isCashier = false,
+  toolbarMode = "admin",
 
 }) {
 
@@ -430,7 +430,7 @@ export default function DailyRegisterView({
 
 
 
-      {isCashier ? (
+      {toolbarMode === "cashier" ? (
         <RegisterToolbarCashier
           loadDay={loadDay}
           onRefresh={onRefresh}
@@ -850,5 +850,10 @@ function RegisterTimelineAmounts({ e, t }) {
 
   );
 
+}
+
+/** Admin/manager daily register — includes calendar date picker toolbar. */
+export default function DailyRegisterView(props) {
+  return <DailyRegisterContent toolbarMode="admin" {...props} />;
 }
 
