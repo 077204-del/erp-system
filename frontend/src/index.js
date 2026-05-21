@@ -6,14 +6,19 @@ import reportWebVitals from './reportWebVitals';
 import { initMobileBoot } from './mobileBoot';
 import { initNativeWebCache } from './nativeWebCache';
 import { initOfflineBootstrap } from './offline/offlineBootstrap';
+import AdminNotificationBridge from './components/AdminNotificationBridge';
+import { bootAdminNotificationSocket } from './services/adminNotificationSocket';
 
+console.log('[ADMIN SOCKET INIT] index.js — app bootstrap');
 initMobileBoot();
 void initNativeWebCache();
 initOfflineBootstrap();
+bootAdminNotificationSocket();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
+    <AdminNotificationBridge />
     <App />
   </React.StrictMode>
 );

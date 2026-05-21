@@ -1,33 +1,40 @@
 import { useEffect } from "react";
-import { useErpUi } from "../context/ErpUiContext";
 import {
+  bootAdminNotificationSocket,
   connectAdminNotificationSocket,
-  disconnectAdminNotificationSocket,
 } from "../services/adminNotificationSocket";
-import { resolveWorkspaceRole } from "../utils/workspaceRole";
+
+console.log("[ADMIN SOCKET INIT] AdminNotificationBridge module loaded");
 
 /**
- * Global admin layout: one Socket.IO connection + one admin_notification listener.
- * Mounted once at App root (not per page).
+ * Root-level admin socket bridge — must mount once, no route guards.
+ * DEBUG: forces socket boot on every app load (role/token checks bypassed in service).
  */
-export default function AdminNotificationBridge({ token }) {
-  const { toast } = useErpUi();
-  const role = resolveWorkspaceRole();
-  const isAdmin = role === "admin";
-  const hasToken = Boolean(token && String(token).trim());
+export default function AdminNotificationBridge() {
+  console.log("[ADMIN SOCKET INIT] bridge mounted");
 
   useEffect(() => {
-    if (!hasToken || !isAdmin) {
-      disconnectAdminNotificationSocket();
-      return undefined;
-    }
+    console.log("[ADMIN SOCKET INIT] bridge effect — starting socket");
+    bootAdminNotificationSocket({ forceReconnect: true });
 
-    connectAdminNotificationSocket(token, { toast });
-
-    return () => {
-      disconnectAdminNotificationSocket();
+    const onStorage = () => {
+      let tk = "";
+      try {
+        tk = localStorage.getItem("token") || "";
+      } catch {
+        /* ignore */
+      }
+      console.log("[ADMIN SOCKET INIT] token storage change — reconnect", {
+        hasToken: Boolean(String(tk).trim()),
+      });
+      connectAdminNotificationSocket(tk, { forceReconnect: true });
     };
-  }, [hasToken, isAdmin, token]);
+
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
 
   return null;
 }

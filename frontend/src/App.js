@@ -3,7 +3,6 @@ import api from "./api";
 import MobileLayoutPreview, {
   isMobileLayoutPreviewHash,
 } from "./components/MobileLayoutPreview";
-import AdminNotificationBridge from "./components/AdminNotificationBridge";
 import LayoutShell from "./components/LayoutShell";
 import { ErpUiProvider, useErpUi } from "./context/ErpUiContext";
 import { LocaleProvider, useLocale } from "./context/LocaleContext";
@@ -678,6 +677,7 @@ function MainWorkspace({ setToken, reportLoading }) {
 }
 
 export default function App() {
+  console.log("[ADMIN SOCKET INIT] App component render");
   const [token, setToken] = useState(localStorage.getItem("token"));
   const [globalLoading, setGlobalLoading] = useState(false);
   const [mobilePreview, setMobilePreview] = useState(() =>
@@ -719,36 +719,29 @@ export default function App() {
     return () => window.removeEventListener("focus", onFocus);
   }, [token, setToken]);
 
-  if (mobilePreview) {
-    return <MobileLayoutPreview />;
-  }
+  const workspace = mobilePreview ? (
+    <MobileLayoutPreview />
+  ) : !token ? (
+    <Login
+      onLogin={(payload) => {
+        const tk =
+          payload && typeof payload === "object" ? payload.token : payload;
+        const tkStr = String(tk || "").trim();
+        if (tkStr) {
+          localStorage.setItem("token", tkStr);
+          setToken(tkStr);
+          connectAdminNotificationSocket(tkStr, { forceReconnect: true });
+        }
+      }}
+      onLoadingChange={setGlobalLoading}
+    />
+  ) : (
+    <MainWorkspace setToken={setToken} reportLoading={setGlobalLoading} />
+  );
 
   return (
     <LocaleProvider>
-      <ErpUiProvider globalLoading={globalLoading}>
-        <AdminNotificationBridge token={token} />
-        {!token ? (
-          <Login
-            onLogin={(payload) => {
-              const tk =
-                payload && typeof payload === "object"
-                  ? payload.token
-                  : payload;
-              const tkStr = String(tk || "").trim();
-              if (tkStr) {
-                localStorage.setItem("token", tkStr);
-                setToken(tkStr);
-                if (resolveWorkspaceRole() === "admin") {
-                  connectAdminNotificationSocket(tkStr);
-                }
-              }
-            }}
-            onLoadingChange={setGlobalLoading}
-          />
-        ) : (
-          <MainWorkspace setToken={setToken} reportLoading={setGlobalLoading} />
-        )}
-      </ErpUiProvider>
+      <ErpUiProvider globalLoading={globalLoading}>{workspace}</ErpUiProvider>
     </LocaleProvider>
   );
 }

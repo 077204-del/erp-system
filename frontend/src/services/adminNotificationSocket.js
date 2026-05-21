@@ -6,15 +6,24 @@ import { formatMoneyDZD } from "../utils/erpFormat";
 export const ADMIN_NOTIFICATION_EVENT = "admin_notification";
 export const ADMIN_SOCKET_ROOM = "admins";
 
+/** DEBUG: bypass role/token gates until notifications work in production. */
+const FORCE_ADMIN_SOCKET_INIT = true;
+
 let socketInstance = null;
 let activeToken = "";
 let toastApi = null;
+let bootStarted = false;
+
+function readAuthToken() {
+  try {
+    return String(localStorage.getItem("token") || "").trim();
+  } catch {
+    return "";
+  }
+}
 
 function handleNotificationPayload(payload) {
-  console.log(
-    "[notifications:client] admin_notification received",
-    payload
-  );
+  console.log("[ADMIN SOCKET INIT] admin_notification received", payload);
   if (!payload || typeof payload !== "object") return;
   const msg = String(payload.message || "").trim() || "Cashier activity";
   const amt = Number(payload.amount);
@@ -25,9 +34,6 @@ function handleNotificationPayload(payload) {
   }
 }
 
-/**
- * Register listeners once per socket instance — before connect().
- */
 function mountAdminNotificationListeners(socket) {
   if (socket.__erpAdminListenersMounted) {
     return;
@@ -35,7 +41,7 @@ function mountAdminNotificationListeners(socket) {
   socket.__erpAdminListenersMounted = true;
 
   socket.on("connect", () => {
-    console.log("[notifications:client] socket connected", {
+    console.log("[SOCKET CONNECTED]", {
       socketId: socket.id,
       connected: socket.connected,
       event: ADMIN_NOTIFICATION_EVENT,
@@ -44,34 +50,53 @@ function mountAdminNotificationListeners(socket) {
   });
 
   socket.on("admin_socket_ready", (meta) => {
-    console.log("[notifications:client] joined room", ADMIN_SOCKET_ROOM, meta);
+    console.log("[joined admins room]", meta);
   });
 
   socket.on("connect_error", (err) => {
-    console.warn(
-      "[notifications:client] connect_error",
-      err?.message || err
-    );
+    console.warn("[ADMIN SOCKET INIT] connect_error", err?.message || err);
   });
 
   socket.on("disconnect", (reason) => {
-    console.log("[notifications:client] disconnected", reason);
+    console.log("[ADMIN SOCKET INIT] disconnected", reason);
   });
 
   socket.on(ADMIN_NOTIFICATION_EVENT, handleNotificationPayload);
   console.log(
-    "[notifications:client] listener mounted for",
+    "[ADMIN SOCKET INIT] listener mounted for",
     ADMIN_NOTIFICATION_EVENT
   );
+}
+
+/**
+ * App-load boot: runs from index.js before React tree (forced debug).
+ */
+export function bootAdminNotificationSocket(options = {}) {
+  if (bootStarted && socketInstance?.connected && !options.forceReconnect) {
+    console.log("[ADMIN SOCKET INIT] boot already started — reusing socket");
+    return socketInstance;
+  }
+  bootStarted = true;
+  const tk = readAuthToken();
+  console.log("[ADMIN SOCKET INIT] bootAdminNotificationSocket", {
+    hasToken: Boolean(tk),
+    force: FORCE_ADMIN_SOCKET_INIT,
+  });
+  return connectAdminNotificationSocket(tk, {
+    ...options,
+    force: FORCE_ADMIN_SOCKET_INIT,
+  });
 }
 
 /**
  * Singleton admin Socket.IO client. Server joins room "admins" on handshake.
  */
 export function connectAdminNotificationSocket(token, options = {}) {
-  const tk = String(token || "").trim();
-  if (!tk) {
-    console.log("[notifications:client] connect skipped — no token");
+  const force = FORCE_ADMIN_SOCKET_INIT || options.force === true;
+  const tk = String(token || readAuthToken() || "").trim();
+
+  if (!tk && !force) {
+    console.log("[ADMIN SOCKET INIT] connect skipped — no token");
     return null;
   }
 
@@ -82,9 +107,10 @@ export function connectAdminNotificationSocket(token, options = {}) {
   if (
     socketInstance &&
     activeToken === tk &&
-    socketInstance.connected
+    socketInstance.connected &&
+    !options.forceReconnect
   ) {
-    console.log("[notifications:client] reusing connected socket", {
+    console.log("[ADMIN SOCKET INIT] reusing connected socket", {
       socketId: socketInstance.id,
     });
     return socketInstance;
@@ -95,22 +121,19 @@ export function connectAdminNotificationSocket(token, options = {}) {
   }
 
   const base = getApiBaseUrl();
-  console.log("[notifications:client] establishing connection", {
-    url: base,
-    room: ADMIN_SOCKET_ROOM,
-    listenEvent: ADMIN_NOTIFICATION_EVENT,
-  });
+  console.log("[ADMIN SOCKET INIT] socket creating", { url: base, hasToken: Boolean(tk) });
 
   const socket = io(base, {
     autoConnect: false,
     path: "/socket.io",
     transports: ["polling", "websocket"],
-    auth: { token: tk },
+    auth: tk ? { token: tk } : {},
     reconnection: true,
     reconnectionAttempts: 12,
   });
 
   mountAdminNotificationListeners(socket);
+  console.log("[ADMIN SOCKET INIT] socket connecting");
   socket.connect();
 
   socketInstance = socket;
@@ -120,11 +143,12 @@ export function connectAdminNotificationSocket(token, options = {}) {
 
 export function disconnectAdminNotificationSocket() {
   if (!socketInstance) return;
-  console.log("[notifications:client] disconnecting admin socket");
+  console.log("[ADMIN SOCKET INIT] disconnecting admin socket");
   socketInstance.removeAllListeners();
   socketInstance.close();
   socketInstance = null;
   activeToken = "";
+  bootStarted = false;
 }
 
 export function getAdminNotificationSocket() {

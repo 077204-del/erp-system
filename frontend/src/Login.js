@@ -64,9 +64,10 @@ function Login({ onLogin, onLoadingChange }) {
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
 
-      if (user && user.role === "admin") {
-        connectAdminNotificationSocket(token, { toast });
-      }
+      connectAdminNotificationSocket(token, {
+        toast,
+        forceReconnect: true,
+      });
 
       toast.success(t("login.welcome"));
       onLogin({ token, user });
