@@ -4,9 +4,11 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { initMobileBoot } from './mobileBoot';
+import { initNativeWebCache } from './nativeWebCache';
 import { initOfflineBootstrap } from './offline/offlineBootstrap';
 
 initMobileBoot();
+void initNativeWebCache();
 initOfflineBootstrap();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));

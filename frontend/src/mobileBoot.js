@@ -7,7 +7,7 @@ export function initMobileBoot() {
   if (typeof document === "undefined") return undefined;
 
   try {
-    document.documentElement.setAttribute("data-erp-build", "v3");
+    document.documentElement.setAttribute("data-erp-build", "android-1.0.3-v4");
     const h0 =
       typeof window !== "undefined" && window.innerHeight
         ? window.innerHeight
