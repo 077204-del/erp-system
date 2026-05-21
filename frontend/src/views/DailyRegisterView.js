@@ -94,6 +94,8 @@ export default function DailyRegisterView({
 
   workspaceTo = "",
 
+  isCashier = false,
+
 }) {
 
   const { t } = useLocale();
@@ -428,25 +430,27 @@ export default function DailyRegisterView({
 
 
 
-      <RegisterToolbar
-
-        registerDate={registerDate}
-
-        setRegisterDate={setRegisterDate}
-
-        loadDay={loadDay}
-
-        onRefresh={onRefresh}
-
-        exportJson={exportJson}
-
-        loading={loading}
-
-        apiLoading={apiLoading}
-
-        t={t}
-
-      />
+      {isCashier ? (
+        <RegisterToolbarCashier
+          loadDay={loadDay}
+          onRefresh={onRefresh}
+          exportJson={exportJson}
+          loading={loading}
+          apiLoading={apiLoading}
+          t={t}
+        />
+      ) : (
+        <RegisterToolbar
+          registerDate={registerDate}
+          setRegisterDate={setRegisterDate}
+          loadDay={loadDay}
+          onRefresh={onRefresh}
+          exportJson={exportJson}
+          loading={loading}
+          apiLoading={apiLoading}
+          t={t}
+        />
+      )}
 
 
 
@@ -475,6 +479,46 @@ export default function DailyRegisterView({
 }
 
 
+
+function RegisterToolbarCashier({
+  loadDay,
+  onRefresh,
+  exportJson,
+  loading,
+  apiLoading,
+  t,
+}) {
+  return (
+    <div className="erp-filter erp-filter--inline erp-register-toolbar">
+      <div className="erp-btn-row">
+        <button
+          type="button"
+          className="erp-btn erp-btn-ghost erp-btn-sm"
+          onClick={() => loadDay()}
+          disabled={loading || apiLoading}
+        >
+          {apiLoading ? t("register.refreshing") : t("register.refreshDay")}
+        </button>
+        <button
+          type="button"
+          className="erp-btn erp-btn-ghost erp-btn-sm"
+          onClick={onRefresh}
+          disabled={loading}
+        >
+          {t("register.refreshWs")}
+        </button>
+        <button
+          type="button"
+          className="erp-btn erp-btn-primary erp-btn-sm"
+          onClick={exportJson}
+          disabled={apiLoading}
+        >
+          {t("register.exportJson")}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function RegisterToolbar({
 

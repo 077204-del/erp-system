@@ -7,6 +7,7 @@ import NewSaleModal from "../components/NewSaleModal";
 import ProductFormModal from "../components/ProductFormModal";
 import ClientFormModal from "../components/ClientFormModal";
 import ErpSearchSelect from "../components/ErpSearchSelect";
+import CashierPeriodToolbar from "../components/CashierPeriodToolbar";
 import { useErpUi } from "../context/ErpUiContext";
 import { useLocale } from "../context/LocaleContext";
 import {
@@ -39,12 +40,15 @@ function KpiCard({ label, value, hint, tone = "blue" }) {
   );
 }
 
-/** Cashier dashboard — KPIs and alerts only; no date/filter UI in this tree. */
+/** Cashier dashboard — period presets + KPIs; no date/filter inputs in DOM. */
 export function CashierDashboardView({
   loading,
   initialSyncDone,
   dashboard,
   products,
+  loadToday,
+  loadWeek,
+  activePreset = "week",
 }) {
   const { t } = useLocale();
   const showKpiSkeleton = loading && !initialSyncDone;
@@ -78,6 +82,13 @@ export function CashierDashboardView({
           </p>
         </div>
       ) : null}
+
+      <CashierPeriodToolbar
+        onToday={loadToday}
+        onWeek={loadWeek}
+        activePreset={activePreset}
+        loading={loading}
+      />
 
       <section className="erp-section" aria-label={t("dashboard.performance")}>
         <h2 className="erp-section-title">{t("dashboard.performance")}</h2>
@@ -164,6 +175,192 @@ export function CashierDashboardView({
   );
 }
 
+/** Cashier sales — Today / This Week only; no date inputs or apply/reset in DOM. */
+export function CashierSalesView({
+  sales,
+  loading,
+  initialSyncDone,
+  products,
+  clients,
+  onRefreshWorkspace,
+  canCreateSales = true,
+  canEditSales = false,
+  canVoidSales = false,
+  loadToday,
+  loadWeek,
+  activePreset = "week",
+}) {
+  const { t } = useLocale();
+  const { toast, confirm } = useErpUi();
+  const [saleModalOpen, setSaleModalOpen] = useState(false);
+  const [editingSale, setEditingSale] = useState(null);
+
+  const columns = [
+    {
+      key: "product",
+      header: "Product",
+      searchAccessor: (r) =>
+        r.productId && r.productId.name != null ? r.productId.name : "",
+      titleAccessor: (r) =>
+        r.productId && r.productId.name != null ? r.productId.name : "",
+      render: (r) =>
+        safeText(
+          r.productId && r.productId.name != null ? r.productId.name : "",
+          "—"
+        ),
+    },
+    { key: "quantity", header: "Qty", numeric: true },
+    { key: "status", header: "Status", render: (r) => safeText(r.status, "—") },
+    { key: "debt", header: "Debt", numeric: true, currency: true },
+    { key: "total", header: "Total", numeric: true, currency: true },
+    ...(canEditSales || canVoidSales
+      ? [
+          {
+            key: "actions",
+            header: "",
+            clip: false,
+            render: (r) => (
+              <div className="erp-table-actions">
+                {canEditSales ? (
+                  <button
+                    type="button"
+                    className="erp-btn erp-btn-ghost erp-btn-sm"
+                    onClick={() => {
+                      setEditingSale(r);
+                      setSaleModalOpen(true);
+                    }}
+                  >
+                    {t("saleFlow.edit")}
+                  </button>
+                ) : null}
+                {canVoidSales ? (
+                  <button
+                    type="button"
+                    className="erp-btn erp-btn-danger erp-btn-sm"
+                    onClick={() => {
+                      confirm({
+                        title: t("saleFlow.voidTitle"),
+                        message: t("saleFlow.voidLead"),
+                        danger: true,
+                        confirmLabel: t("saleFlow.voidConfirm"),
+                        onConfirm: async () => {
+                          const reason = window.prompt(
+                            t("saleFlow.voidReasonPrompt")
+                          );
+                          if (reason == null) return;
+                          const trimmed = String(reason).trim();
+                          if (!trimmed) {
+                            toast.warning(
+                              t("saleFlow.voidReasonRequired"),
+                              t("saleFlow.voidTitle")
+                            );
+                            return;
+                          }
+                          try {
+                            await api.delete(
+                              `/api/sales/${encodeURIComponent(String(r._id))}`,
+                              { params: { reason: trimmed } }
+                            );
+                            toast.success(t("saleFlow.voided"));
+                            if (typeof onRefreshWorkspace === "function") {
+                              onRefreshWorkspace();
+                            }
+                          } catch (err) {
+                            const st = err.response && err.response.status;
+                            const msg =
+                              st === 403
+                                ? t("saleFlow.voidForbidden")
+                                : apiErrorMessage(err);
+                            toast.error(msg, t("saleFlow.voidTitle"));
+                          }
+                        },
+                      });
+                    }}
+                  >
+                    {t("saleFlow.void")}
+                  </button>
+                ) : null}
+              </div>
+            ),
+          },
+        ]
+      : []),
+  ];
+
+  const rows = sales.map((s) => ({
+    ...s,
+    product: s.productId?.name,
+  }));
+
+  const fab =
+    canCreateSales &&
+    createPortal(
+      <button
+        type="button"
+        className="erp-fab erp-fab--sales"
+        onClick={() => {
+          setEditingSale(null);
+          setSaleModalOpen(true);
+        }}
+        disabled={loading && !initialSyncDone}
+        aria-haspopup="dialog"
+        aria-expanded={saleModalOpen}
+      >
+        {t("saleFlow.fab")}
+      </button>,
+      document.body
+    );
+
+  return (
+    <section className="erp-section erp-section-flush-top erp-sales-module erp-sales-view-shell">
+      <CashierPeriodToolbar
+        onToday={loadToday}
+        onWeek={loadWeek}
+        activePreset={activePreset}
+        loading={loading}
+      />
+      {canCreateSales ? fab : (
+        <p className="erp-page-lead erp-rbac-banner" role="note">
+          {t("rbac.noCreateSales")}
+        </p>
+      )}
+      {!canEditSales && !canVoidSales ? (
+        <p className="erp-card-hint erp-sales-perm-hint" role="note">
+          {t("saleFlow.readOnlyOpsHint")}
+        </p>
+      ) : null}
+      <ErpDataTable
+        columns={columns}
+        rows={rows}
+        getRowId={(r) => String(r?._id ?? "")}
+        pageSize={10}
+        loading={loading}
+        showSkeleton={!initialSyncDone}
+        emptyTitle="No sales in this range"
+        emptyHint="Use Today or This Week to load sales."
+        searchPlaceholder="Search sales…"
+      />
+      <NewSaleModal
+        open={
+          saleModalOpen &&
+          ((canCreateSales && !editingSale) || (canEditSales && editingSale))
+        }
+        onClose={() => {
+          setSaleModalOpen(false);
+          setEditingSale(null);
+        }}
+        products={products}
+        clients={clients}
+        onSuccess={onRefreshWorkspace}
+        toast={toast}
+        mode={editingSale ? "edit" : "create"}
+        editSale={editingSale}
+      />
+      <ErpModuleFooter />
+    </section>
+  );
+}
+
 export function DashboardView({
   loading,
   initialSyncDone,
@@ -187,17 +384,6 @@ export function DashboardView({
   const roleLower = String(role || dashboardMeta?.role || "")
     .trim()
     .toLowerCase();
-
-  if (roleLower === "cashier") {
-    return (
-      <CashierDashboardView
-        loading={loading}
-        initialSyncDone={initialSyncDone}
-        dashboard={dashboard}
-        products={products}
-      />
-    );
-  }
 
   const showFinancial =
     canViewFinancial === true &&

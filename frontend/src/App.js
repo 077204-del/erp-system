@@ -28,6 +28,7 @@ import AuditLogsView from "./views/AuditLogsView";
 import ExpensesView from "./views/ExpensesView";
 import {
   CashierDashboardView,
+  CashierSalesView,
   ClientsView,
   DashboardView,
   PaymentsView,
@@ -520,6 +521,9 @@ function MainWorkspace({ setToken, reportLoading }) {
             initialSyncDone={initialSyncDone}
             dashboard={dashboard}
             products={products}
+            loadToday={loadToday}
+            loadWeek={loadWeek}
+            activePreset={cashierPreset}
           />
         ) : (
           <DashboardView
@@ -545,31 +549,48 @@ function MainWorkspace({ setToken, reportLoading }) {
       ) : null}
 
       {activeView === "sales" ? (
-        <SalesView
-          sales={sales}
-          loading={loading}
-          initialSyncDone={initialSyncDone}
-          products={products}
-          clients={clients}
-          from={from}
-          to={to}
-          onFromChange={setFrom}
-          onToChange={setTo}
-          onApplySalesRange={() => fetchAll(from, to)}
-          onSalesPreset={applyReportPreset}
-          onRefreshWorkspace={() => fetchAll(from, to)}
-          canCreateSales={canCreateSales}
-          canEditSales={canEditSales}
-          canVoidSales={canVoidSales}
-          showCashierFilter={isAdmin}
-          isCashier={isCashier || apiRole === "cashier"}
-          cashiers={saleCashiers}
-          cashierId={workspaceCashierId}
-          onCashierChange={(id) => {
-            setWorkspaceCashierId(id);
-            fetchAll(from, to, { cashierId: id });
-          }}
-        />
+        isCashier ? (
+          <CashierSalesView
+            sales={sales}
+            loading={loading}
+            initialSyncDone={initialSyncDone}
+            products={products}
+            clients={clients}
+            onRefreshWorkspace={refreshWorkspaceData}
+            canCreateSales={canCreateSales}
+            canEditSales={canEditSales}
+            canVoidSales={canVoidSales}
+            loadToday={loadToday}
+            loadWeek={loadWeek}
+            activePreset={cashierPreset}
+          />
+        ) : (
+          <SalesView
+            sales={sales}
+            loading={loading}
+            initialSyncDone={initialSyncDone}
+            products={products}
+            clients={clients}
+            from={from}
+            to={to}
+            onFromChange={setFrom}
+            onToChange={setTo}
+            onApplySalesRange={() => fetchAll(from, to)}
+            onSalesPreset={applyReportPreset}
+            onRefreshWorkspace={() => fetchAll(from, to)}
+            canCreateSales={canCreateSales}
+            canEditSales={canEditSales}
+            canVoidSales={canVoidSales}
+            showCashierFilter={isAdmin}
+            isCashier={false}
+            cashiers={saleCashiers}
+            cashierId={workspaceCashierId}
+            onCashierChange={(id) => {
+              setWorkspaceCashierId(id);
+              fetchAll(from, to, { cashierId: id });
+            }}
+          />
+        )
       ) : null}
 
       {activeView === "products" ? (
@@ -660,10 +681,11 @@ function MainWorkspace({ setToken, reportLoading }) {
           sales={sales}
           payments={payments}
           loading={loading}
-          onRefresh={() => fetchAll(from, to)}
+          onRefresh={refreshWorkspaceData}
           canViewFinancial={canViewFinancialKpis}
           workspaceFrom={from}
           workspaceTo={to}
+          isCashier={isCashier}
         />
       ) : null}
 

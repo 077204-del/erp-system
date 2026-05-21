@@ -1841,6 +1841,19 @@ select option {
   color: #fff;
 }
 
+.erp-cashier-period-btns button.erp-cashier-period-btns__btn--active,
+.erp-cashier-period-btns button.erp-cashier-period-btns__btn--active:first-child {
+  background: var(--erp-primary, #2563eb);
+  border-color: var(--erp-primary, #2563eb);
+  color: #fff;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+}
+
+.erp-cashier-period-btns button:not(.erp-cashier-period-btns__btn--active):not(:first-child) {
+  background: var(--erp-surface, #fff);
+  color: var(--erp-text, #0f172a);
+}
+
 .erp-cashier-period-btns button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
