@@ -5,7 +5,7 @@ const notificationSchema = new mongoose.Schema(
     type: {
       type: String,
       required: true,
-      enum: ["SALE", "PAYMENT", "DEBT"],
+      enum: ["SALE", "PAYMENT", "DEBT", "UPDATE"],
       index: true,
     },
     message: { type: String, required: true, maxlength: 2000 },

@@ -3,11 +3,12 @@ const Notification = require("../models/notification.model");
 const User = require("../models/user.model");
 const { normalizeRole } = require("./rbac.service");
 
-const TYPES = new Set(["SALE", "PAYMENT", "DEBT"]);
+const TYPES = new Set(["SALE", "PAYMENT", "UPDATE", "DEBT"]);
 
 function defaultMessageForType(type) {
   if (type === "SALE") return "Created a sale";
-  if (type === "PAYMENT") return "Recorded a sale payment";
+  if (type === "PAYMENT") return "Recorded a payment";
+  if (type === "UPDATE") return "Updated a sale";
   if (type === "DEBT") return "Recorded a client debt payment";
   return "Cashier activity";
 }
@@ -15,14 +16,19 @@ function defaultMessageForType(type) {
 function toPayload(doc) {
   const o = doc && typeof doc.toObject === "function" ? doc.toObject() : doc;
   if (!o) return null;
+  const cashierId =
+    o.cashierId != null ? String(o.cashierId) : null;
+  const createdAt = o.createdAt || new Date();
   return {
     id: String(o._id),
     type: o.type,
     message: o.message,
     amount: Number(o.amount) || 0,
     read: Boolean(o.read),
-    createdAt: o.createdAt,
-    cashierId: o.cashierId != null ? String(o.cashierId) : null,
+    createdAt,
+    cashierId,
+    cashier: cashierId,
+    timestamp: createdAt,
   };
 }
 
@@ -31,16 +37,18 @@ function toPayload(doc) {
  */
 async function createNotification(payload) {
   const { app, type, message, amount = 0, cashierId } = payload;
-  if (!TYPES.has(type)) {
+  const normalizedType = type === "DEBT" ? "PAYMENT" : type;
+  if (!TYPES.has(type) && !TYPES.has(normalizedType)) {
     throw new Error(`Invalid notification type: ${type}`);
   }
+  const storeType = TYPES.has(normalizedType) ? normalizedType : type;
   const cid = cashierId != null ? String(cashierId).trim() : "";
   if (!cid || !mongoose.Types.ObjectId.isValid(cid)) {
     throw new Error("Invalid cashierId for notification");
   }
 
   const doc = await Notification.create({
-    type,
+    type: storeType,
     message: String(message || "").slice(0, 2000),
     amount: Number.isFinite(Number(amount)) ? Number(amount) : 0,
     cashierId: new mongoose.Types.ObjectId(cid),
@@ -81,11 +89,12 @@ async function notifyCashierAction(req, { type, message, amount }) {
     } catch {
       /* ignore */
     }
-    const body = String(message || "").trim() || defaultMessageForType(type);
+    const notifyType = type === "DEBT" ? "PAYMENT" : type;
+    const body = String(message || "").trim() || defaultMessageForType(notifyType);
     const fullMessage = `[${label}] ${body}`;
     return await createNotification({
       app: req.app,
-      type,
+      type: notifyType,
       message: fullMessage,
       amount,
       cashierId: String(req.user.id),

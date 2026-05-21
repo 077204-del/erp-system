@@ -50,6 +50,12 @@ exports.createPayment = async (req, res, next) => {
         req
       );
 
+      void notifyCashierAction(req, {
+        type: "PAYMENT",
+        message: "Recorded a sale payment",
+        amount: paymentAmount,
+      });
+
       return res.status(201).json({
         message: "Payment recorded",
         payment: result.payment,
@@ -95,8 +101,8 @@ exports.createPayment = async (req, res, next) => {
     );
 
     void notifyCashierAction(req, {
-      type: "DEBT",
-      message: "",
+      type: "PAYMENT",
+      message: "Recorded a client debt payment",
       amount: paymentAmount,
     });
 

@@ -239,6 +239,12 @@ exports.updateSale = async (req, res) => {
       io.emit("sale-updated", safeSale);
     }
 
+    void notifyCashierAction(req, {
+      type: "UPDATE",
+      message: "Updated a sale",
+      amount: Number(sale.total) || 0,
+    });
+
     return res.json(safeSale);
   } catch (err) {
     return res.status(500).json({
@@ -281,6 +287,11 @@ exports.paySale = async (req, res, next) => {
     );
 
     const role = roleFromReq(req);
+    void notifyCashierAction(req, {
+      type: "PAYMENT",
+      message: "Recorded a sale payment",
+      amount: Number(result.payment?.amount ?? amount) || 0,
+    });
     return res.json({
       message: "Payment applied",
       sale: sanitizeSale(result.sale, role),

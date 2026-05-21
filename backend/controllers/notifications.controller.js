@@ -15,24 +15,29 @@ exports.listNotifications = async (req, res) => {
       .populate("cashierId", "username role")
       .lean();
 
-    const notifications = rows.map((n) => ({
-      id: String(n._id),
-      type: n.type,
-      message: n.message,
-      amount: Number(n.amount) || 0,
-      read: Boolean(n.read),
-      createdAt: n.createdAt,
-      cashierId:
+    const notifications = rows.map((n) => {
+      const cashierId =
         n.cashierId && typeof n.cashierId === "object" && n.cashierId._id
           ? String(n.cashierId._id)
           : n.cashierId != null
             ? String(n.cashierId)
-            : null,
-      cashierUsername:
-        n.cashierId && typeof n.cashierId === "object"
-          ? String(n.cashierId.username || "")
-          : "",
-    }));
+            : null;
+      return {
+        id: String(n._id),
+        type: n.type,
+        message: n.message,
+        amount: Number(n.amount) || 0,
+        read: Boolean(n.read),
+        createdAt: n.createdAt,
+        cashierId,
+        cashier: cashierId,
+        timestamp: n.createdAt,
+        cashierUsername:
+          n.cashierId && typeof n.cashierId === "object"
+            ? String(n.cashierId.username || "")
+            : "",
+      };
+    });
 
     return res.json({ notifications });
   } catch (err) {
