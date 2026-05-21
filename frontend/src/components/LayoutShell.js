@@ -3,6 +3,7 @@ import { useErpUi } from "../context/ErpUiContext";
 import { useLocale } from "../context/LocaleContext";
 import { useAdminNotificationSocket } from "../hooks/useAdminNotificationSocket";
 import { safeText } from "../utils/erpFormat";
+import { resolveWorkspaceRole } from "../utils/workspaceRole";
 
 const NAV = [
   { id: "dashboard", icon: "grid" },
@@ -146,8 +147,9 @@ export default function LayoutShell({
 }) {
   const { t } = useLocale();
   const { toast } = useErpUi();
-  const role = String(userRole || "").toLowerCase();
-  const isAdmin = role === "admin";
+  const workspaceRole = resolveWorkspaceRole();
+  const role = workspaceRole || String(userRole || "").toLowerCase();
+  const isAdmin = workspaceRole === "admin";
 
   useAdminNotificationSocket({
     enabled: isAdmin,

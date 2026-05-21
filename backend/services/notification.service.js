@@ -32,6 +32,16 @@ function toPayload(doc) {
   };
 }
 
+async function countAdminSockets(io) {
+  try {
+    if (!io || typeof io.in !== "function") return 0;
+    const sockets = await io.in("admins").fetchSockets();
+    return Array.isArray(sockets) ? sockets.length : 0;
+  } catch {
+    return -1;
+  }
+}
+
 /**
  * Persist admin notification and emit to connected admin sockets (room "admins").
  */
@@ -59,13 +69,31 @@ async function createNotification(payload) {
   const io = app && typeof app.get === "function" ? app.get("io") : null;
   if (io && typeof io.to === "function") {
     try {
+      const adminCount = await countAdminSockets(io);
       io.to("admins").emit("admin_notification", out);
+      console.log("[notifications] emitted admin_notification", {
+        event: "admin_notification",
+        targetRoom: "admins",
+        targetRole: "admin",
+        connectedAdmins: adminCount,
+        type: out.type,
+        payload: out,
+      });
+      if (adminCount === 0) {
+        console.warn(
+          "[notifications] no admin sockets in room 'admins' — web admin may be offline or not connected"
+        );
+      }
     } catch (err) {
       console.error(
         "[notifications] Socket emit failed:",
         err && err.message ? err.message : err
       );
     }
+  } else {
+    console.warn(
+      "[notifications] Socket.IO not available on app — notification saved only"
+    );
   }
 
   return doc;
@@ -76,10 +104,18 @@ async function createNotification(payload) {
  */
 async function notifyCashierAction(req, { type, message, amount }) {
   try {
-    if (normalizeRole(req.user && req.user.role) !== "cashier") {
+    const role = normalizeRole(req.user && req.user.role);
+    if (role !== "cashier") {
+      console.log("[notifications] notifyCashierAction skipped (not cashier)", {
+        role,
+        type,
+      });
       return null;
     }
     if (!req.user || req.user.id == null) {
+      console.log("[notifications] notifyCashierAction skipped (no user id)", {
+        type,
+      });
       return null;
     }
     let label = "Cashier";
@@ -92,6 +128,11 @@ async function notifyCashierAction(req, { type, message, amount }) {
     const notifyType = type === "DEBT" ? "PAYMENT" : type;
     const body = String(message || "").trim() || defaultMessageForType(notifyType);
     const fullMessage = `[${label}] ${body}`;
+    console.log("[notifications] notifyCashierAction", {
+      type: notifyType,
+      cashierId: String(req.user.id),
+      amount: Number(amount) || 0,
+    });
     return await createNotification({
       app: req.app,
       type: notifyType,

@@ -88,6 +88,7 @@ function normalizeRole(role) {
   ) {
     r = "admin";
   }
+  if (r === "caissier") r = "cashier";
   if (r === "admin" || r === "manager" || r === "cashier") return r;
   return "cashier";
 }

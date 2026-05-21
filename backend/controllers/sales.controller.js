@@ -333,6 +333,13 @@ exports.voidSale = async (req, res) => {
       },
       req
     );
+
+    void notifyCashierAction(req, {
+      type: "UPDATE",
+      message: "Voided a sale",
+      amount: 0,
+    });
+
     return res.json({ message: "Sale voided", voided: true });
   } catch (err) {
     return res.status(500).json({ error: err.message });
