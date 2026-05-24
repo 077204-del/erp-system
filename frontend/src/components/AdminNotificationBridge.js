@@ -1,40 +1,38 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useErpUi } from "../context/ErpUiContext";
 import {
-  bootAdminNotificationSocket,
   connectAdminNotificationSocket,
+  disconnectAdminNotificationSocket,
 } from "../services/adminNotificationSocket";
-
-console.log("[ADMIN SOCKET INIT] AdminNotificationBridge module loaded");
+import { resolveWorkspaceRole } from "../utils/workspaceRole";
 
 /**
- * Root-level admin socket bridge — must mount once, no route guards.
- * DEBUG: forces socket boot on every app load (role/token checks bypassed in service).
+ * Global admin socket — mounted once inside ErpUiProvider at App root.
+ * Connects only for admin role after login (server joins room "admins").
  */
-export default function AdminNotificationBridge() {
-  console.log("[ADMIN SOCKET INIT] bridge mounted");
+export default function AdminNotificationBridge({ token }) {
+  const { toast } = useErpUi();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
+
+  const role = resolveWorkspaceRole();
+  const isAdmin = role === "admin";
+  const tokenStr = String(token || "").trim();
 
   useEffect(() => {
-    console.log("[ADMIN SOCKET INIT] bridge effect — starting socket");
-    bootAdminNotificationSocket({ forceReconnect: true });
+    if (!isAdmin || !tokenStr) {
+      disconnectAdminNotificationSocket();
+      return undefined;
+    }
 
-    const onStorage = () => {
-      let tk = "";
-      try {
-        tk = localStorage.getItem("token") || "";
-      } catch {
-        /* ignore */
-      }
-      console.log("[ADMIN SOCKET INIT] token storage change — reconnect", {
-        hasToken: Boolean(String(tk).trim()),
-      });
-      connectAdminNotificationSocket(tk, { forceReconnect: true });
-    };
+    connectAdminNotificationSocket(tokenStr, {
+      getToast: () => toastRef.current,
+    });
 
-    window.addEventListener("storage", onStorage);
     return () => {
-      window.removeEventListener("storage", onStorage);
+      disconnectAdminNotificationSocket();
     };
-  }, []);
+  }, [isAdmin, tokenStr]);
 
   return null;
 }

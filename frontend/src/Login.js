@@ -4,7 +4,6 @@ import { purgeApiCachesOnBoot } from "./offline/responseCache";
 import ErpModuleFooter from "./components/ErpModuleFooter";
 import { useErpUi } from "./context/ErpUiContext";
 import { useLocale } from "./context/LocaleContext";
-import { connectAdminNotificationSocket } from "./services/adminNotificationSocket";
 
 function loginErrorMessage(err) {
   if (!err) return "Login failed. Please try again.";
@@ -63,11 +62,6 @@ function Login({ onLogin, onLoadingChange }) {
       }
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
-
-      connectAdminNotificationSocket(token, {
-        toast,
-        forceReconnect: true,
-      });
 
       toast.success(t("login.welcome"));
       onLogin({ token, user });

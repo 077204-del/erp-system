@@ -28,6 +28,10 @@ function attachAdminSocket(io) {
       socket.data.role = role;
       if (role === "admin") {
         socket.join("admins");
+        console.log("[notifications:socket] joining admins room", {
+          userId: socket.data.userId,
+          role,
+        });
       }
     } catch (err) {
       console.log("[notifications:socket] handshake auth failed:", err.message);
@@ -46,7 +50,12 @@ function attachAdminSocket(io) {
       targetRoom: "admins",
     });
     if (inAdmins) {
-      socket.emit("admin_socket_ready", { ok: true, role });
+      console.log("joined room admins", {
+        socketId: socket.id,
+        userId: socket.data.userId,
+        role,
+      });
+      socket.emit("admin_socket_ready", { ok: true, role, room: "admins" });
     }
   });
 }

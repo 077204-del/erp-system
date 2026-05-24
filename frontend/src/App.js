@@ -3,6 +3,7 @@ import api from "./api";
 import MobileLayoutPreview, {
   isMobileLayoutPreviewHash,
 } from "./components/MobileLayoutPreview";
+import AdminNotificationBridge from "./components/AdminNotificationBridge";
 import LayoutShell from "./components/LayoutShell";
 import { ErpUiProvider, useErpUi } from "./context/ErpUiContext";
 import { LocaleProvider, useLocale } from "./context/LocaleContext";
@@ -11,10 +12,7 @@ import { apiErrorMessage } from "./utils/erpFormat";
 import { freshGetConfig, workspaceGetParams } from "./config/apiRequest";
 import { mapDashboardApiToState } from "./utils/dashboardFinance";
 import { readStoredUserWithJwtSync, resolveWorkspaceRole } from "./utils/workspaceRole";
-import {
-  connectAdminNotificationSocket,
-  disconnectAdminNotificationSocket,
-} from "./services/adminNotificationSocket";
+import { disconnectAdminNotificationSocket } from "./services/adminNotificationSocket";
 import {
   cashierTodayRange,
   getCashierWeekRange,
@@ -677,7 +675,6 @@ function MainWorkspace({ setToken, reportLoading }) {
 }
 
 export default function App() {
-  console.log("[ADMIN SOCKET INIT] App component render");
   const [token, setToken] = useState(localStorage.getItem("token"));
   const [globalLoading, setGlobalLoading] = useState(false);
   const [mobilePreview, setMobilePreview] = useState(() =>
@@ -730,7 +727,6 @@ export default function App() {
         if (tkStr) {
           localStorage.setItem("token", tkStr);
           setToken(tkStr);
-          connectAdminNotificationSocket(tkStr, { forceReconnect: true });
         }
       }}
       onLoadingChange={setGlobalLoading}
@@ -741,7 +737,10 @@ export default function App() {
 
   return (
     <LocaleProvider>
-      <ErpUiProvider globalLoading={globalLoading}>{workspace}</ErpUiProvider>
+      <ErpUiProvider globalLoading={globalLoading}>
+        <AdminNotificationBridge token={token} />
+        {workspace}
+      </ErpUiProvider>
     </LocaleProvider>
   );
 }

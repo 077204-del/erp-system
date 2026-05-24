@@ -6,24 +6,16 @@ import reportWebVitals from './reportWebVitals';
 import { initMobileBoot } from './mobileBoot';
 import { initNativeWebCache } from './nativeWebCache';
 import { initOfflineBootstrap } from './offline/offlineBootstrap';
-import AdminNotificationBridge from './components/AdminNotificationBridge';
-import { bootAdminNotificationSocket } from './services/adminNotificationSocket';
 
-console.log('[ADMIN SOCKET INIT] index.js — app bootstrap');
 initMobileBoot();
 void initNativeWebCache();
 initOfflineBootstrap();
-bootAdminNotificationSocket();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <AdminNotificationBridge />
     <App />
   </React.StrictMode>
 );
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
 reportWebVitals();

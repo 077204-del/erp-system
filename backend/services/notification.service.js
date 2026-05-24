@@ -71,12 +71,10 @@ async function createNotification(payload) {
     try {
       const adminCount = await countAdminSockets(io);
       io.to("admins").emit("admin_notification", out);
-      console.log("[notifications] emitted admin_notification", {
-        event: "admin_notification",
+      console.log("NOTIFICATION EMITTED", {
         targetRoom: "admins",
-        targetRole: "admin",
+        event: "admin_notification",
         connectedAdmins: adminCount,
-        type: out.type,
         payload: out,
       });
       if (adminCount === 0) {
