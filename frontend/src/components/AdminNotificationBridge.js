@@ -4,6 +4,7 @@ import {
   connectAdminNotificationSocket,
   disconnectAdminNotificationSocket,
 } from "../services/adminNotificationSocket";
+import { Capacitor } from "@capacitor/core";
 import { resolveWorkspaceRole } from "../utils/workspaceRole";
 
 /**
@@ -27,10 +28,13 @@ export default function AdminNotificationBridge({ token }) {
 
     connectAdminNotificationSocket(tokenStr, {
       getToast: () => toastRef.current,
+      forceReconnect: false,
     });
 
     return () => {
-      disconnectAdminNotificationSocket();
+      if (!Capacitor.isNativePlatform()) {
+        disconnectAdminNotificationSocket();
+      }
     };
   }, [isAdmin, tokenStr]);
 

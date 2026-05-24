@@ -4,6 +4,9 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import androidx.core.splashscreen.SplashScreen;
@@ -11,38 +14,77 @@ import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 
 /**
- * Clears WebView disk/memory cache on every launch and disables HTTP caching
- * so the app loads fresh frontend assets after APK updates or remote deploys.
+ * WebView shell for hosted ERP UI + Socket.IO (same as browser).
+ * Disables cache, enables JS/storage, signals JS when the page is ready for sockets.
  */
 public class MainActivity extends BridgeActivity {
+  private static final String TAG = "ERPWebView";
   private static final String PREFS = "erp_webview_prefs";
   private static final String KEY_VERSION_CODE = "last_version_code";
+  private final Handler mainHandler = new Handler(Looper.getMainLooper());
+
+  private static final String WEBVIEW_READY_JS =
+      "(function(){"
+          + "try{"
+          + "window.__erpWebViewReady=true;"
+          + "console.log('WEBVIEW SOCKET INIT');"
+          + "window.dispatchEvent(new Event('erp-webview-ready'));"
+          + "}catch(e){console.log('WEBVIEW SOCKET INIT ERR',e&&e.message?e.message:e);}"
+          + "})();";
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
     SplashScreen.installSplashScreen(this);
     super.onCreate(savedInstanceState);
     final boolean versionChanged = recordVersionChange(this);
-    getWindow()
-        .getDecorView()
-        .post(
-            () -> {
-              purgeWebViewCaches(true);
-              if (versionChanged) {
-                reloadWebView();
-              }
-            });
+    whenWebViewReady(
+        () -> {
+          purgeWebViewCaches(true);
+          if (versionChanged) {
+            reloadWebView();
+          }
+          scheduleWebViewReadySignal(800);
+        });
   }
 
   @Override
   public void onResume() {
     super.onResume();
-    getWindow()
-        .getDecorView()
-        .post(
-            () -> {
-              applyNoCacheSettings();
-            });
+    whenWebViewReady(
+        () -> {
+          applyNoCacheSettings();
+          scheduleWebViewReadySignal(400);
+        });
+  }
+
+  private void whenWebViewReady(Runnable action) {
+    mainHandler.post(
+        () -> {
+          Bridge bridge = getBridge();
+          WebView webView = bridge != null ? bridge.getWebView() : null;
+          if (webView == null) {
+            mainHandler.postDelayed(() -> whenWebViewReady(action), 300);
+            return;
+          }
+          action.run();
+        });
+  }
+
+  private void scheduleWebViewReadySignal(long delayMs) {
+    mainHandler.postDelayed(this::signalWebViewReadyToJs, delayMs);
+  }
+
+  private void signalWebViewReadyToJs() {
+    Bridge bridge = getBridge();
+    if (bridge == null) {
+      return;
+    }
+    WebView webView = bridge.getWebView();
+    if (webView == null) {
+      return;
+    }
+    webView.evaluateJavascript(WEBVIEW_READY_JS, null);
+    Log.d(TAG, "dispatched erp-webview-ready to JS");
   }
 
   private boolean recordVersionChange(Context ctx) {
@@ -70,7 +112,7 @@ public class MainActivity extends BridgeActivity {
     webView.clearCache(clearDisk);
     webView.clearHistory();
     webView.clearFormData();
-    applyNoCacheSettings();
+    applyNoCacheSettings(webView);
   }
 
   private void applyNoCacheSettings() {
@@ -82,9 +124,21 @@ public class MainActivity extends BridgeActivity {
     if (webView == null) {
       return;
     }
+    applyNoCacheSettings(webView);
+  }
+
+  private void applyNoCacheSettings(WebView webView) {
     WebSettings settings = webView.getSettings();
-    settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+    settings.setJavaScriptEnabled(true);
     settings.setDomStorageEnabled(true);
+    settings.setDatabaseEnabled(true);
+    settings.setJavaScriptCanOpenWindowsAutomatically(true);
+    settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+    settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
+      WebView.setWebContentsDebuggingEnabled(true);
+    }
   }
 
   private void reloadWebView() {

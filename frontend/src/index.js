@@ -6,10 +6,12 @@ import reportWebVitals from './reportWebVitals';
 import { initMobileBoot } from './mobileBoot';
 import { initNativeWebCache } from './nativeWebCache';
 import { initOfflineBootstrap } from './offline/offlineBootstrap';
+import { initWebViewSocketBridge } from './services/adminNotificationSocket';
 
 initMobileBoot();
 void initNativeWebCache();
 initOfflineBootstrap();
+initWebViewSocketBridge();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
